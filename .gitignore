@@ -1,0 +1,17 @@
+# Root Gitignore for RootRecall project
+
+# Python virtual environment
+backend/venv/
+backend/__pycache__/
+backend/*.db
+backend/*.db-journal
+
+# Next.js and frontend artifacts
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/build/
+
+# OS files
+.DS_Store
+Thumbs.db
