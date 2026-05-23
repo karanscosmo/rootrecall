@@ -7,7 +7,7 @@ export default function MarketingPage() {
   return (
     <div className="min-h-screen bg-rr-bg text-rr-text selection:bg-rr-green/20 relative overflow-hidden">
       {/* Fullscreen ambient background video */}
-      <AmbientVideo opacity={0.22} blur="blur-[10px]" />
+      <AmbientVideo opacity={0.65} blur="blur-[1px]" />
 
       <nav className="fixed top-0 inset-x-0 h-16 border-b border-rr-border bg-rr-bg/80 backdrop-blur z-50 flex items-center justify-between px-6 lg:px-12">
         <div className="flex items-center">

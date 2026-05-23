@@ -37,13 +37,17 @@ function PlatformShell({ children }: { children: React.ReactNode }) {
   }, [pathname, checkSession]);
 
   // Determine ambient video opacity based on the active route
-  let videoOpacity = 0.15; // default subtle telemetry motion for dashboard and health
+  let videoOpacity = 0.50; // clearly visible telemetry background for dashboard
+  let videoBlur = "blur-[2px]";
   if (pathname.includes("/replay")) {
-    videoOpacity = 0.25; // cinematic infrastructure ambience
+    videoOpacity = 0.65; // cinematic infrastructure ambience
+    videoBlur = "blur-[1px]";
   } else if (pathname.includes("/copilot")) {
-    videoOpacity = 0.20; // operational intelligence feel
+    videoOpacity = 0.55; // operational intelligence feel
+    videoBlur = "blur-[2px]";
   } else if (pathname.includes("/settings")) {
-    videoOpacity = 0.10; // extra clean backdrop for settings
+    videoOpacity = 0.35; // cleaner backdrop for settings
+    videoBlur = "blur-[3px]";
   }
 
   if (authLoading) {
@@ -53,7 +57,7 @@ function PlatformShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-screen bg-rr-bg overflow-hidden relative">
       {/* Background motion ambience */}
-      <AmbientVideo opacity={videoOpacity} blur="blur-[8px]" />
+      <AmbientVideo opacity={videoOpacity} blur={videoBlur} />
 
       <Sidebar />
       <div

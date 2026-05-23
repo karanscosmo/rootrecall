@@ -3,17 +3,15 @@ import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 
 interface AmbientVideoProps {
-  opacity?: number; // opacity of the video element, e.g. 0.2
-  blur?: string; // CSS blur value, e.g. "blur-sm", "blur-[10px]"
+  opacity?: number;
+  blur?: string;
   className?: string;
-  overlayColor?: string; // background overlay class
 }
 
 export default function AmbientVideo({
-  opacity = 0.22,
-  blur = "blur-[12px]",
+  opacity = 0.55,
+  blur = "blur-[2px]",
   className,
-  overlayColor = "bg-[#06070A]/40",
 }: AmbientVideoProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isMounted, setIsMounted] = useState(false);
@@ -21,53 +19,40 @@ export default function AmbientVideo({
 
   useEffect(() => {
     setIsMounted(true);
-
-    // Check user preference for reduced motion
-    const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
-    setPrefersReducedMotion(mediaQuery.matches);
-
-    const handleMotionChange = (e: MediaQueryListEvent) => {
-      setPrefersReducedMotion(e.matches);
-    };
-    mediaQuery.addEventListener("change", handleMotionChange);
-
-    return () => {
-      mediaQuery.removeEventListener("change", handleMotionChange);
-    };
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    setPrefersReducedMotion(mq.matches);
+    const onChange = (e: MediaQueryListEvent) => setPrefersReducedMotion(e.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
   }, []);
 
+  // Play as soon as the video element is mounted
   useEffect(() => {
-    if (isMounted && videoRef.current && !prefersReducedMotion) {
-      videoRef.current.play().catch((err) => {
-        console.warn("Ambient video autoplay was blocked or failed: ", err);
+    const vid = videoRef.current;
+    if (!vid || prefersReducedMotion) return;
+    vid.muted = true;
+    const tryPlay = () => {
+      vid.play().catch(() => {
+        // retry once after a short delay (handles some Safari quirks)
+        setTimeout(() => vid.play().catch(() => {}), 500);
       });
+    };
+    if (vid.readyState >= 2) {
+      tryPlay();
+    } else {
+      vid.addEventListener("canplay", tryPlay, { once: true });
     }
   }, [isMounted, prefersReducedMotion]);
 
-  if (!isMounted) return null;
-
-  // Fallback static background if user prefers reduced motion
-  if (prefersReducedMotion) {
-    return (
-      <div
-        className={cn(
-          "absolute inset-0 w-full h-full bg-[#06070A] pointer-events-none select-none z-0",
-          className
-        )}
-      >
-        <div className="absolute inset-0 w-full h-full bg-gradient-to-t from-[#06070A] via-rr-surface/10 to-[#06070A] opacity-60" />
-      </div>
-    );
-  }
+  if (!isMounted || prefersReducedMotion) return null;
 
   return (
     <div
       className={cn(
-        "absolute inset-0 w-full h-full overflow-hidden pointer-events-none select-none z-0 transform-gpu",
+        "absolute inset-0 w-full h-full overflow-hidden pointer-events-none select-none z-0",
         className
       )}
     >
-      {/* Autoplay, muted, loops inline telemetry video */}
       <video
         ref={videoRef}
         src="/ambient_bg.mp4"
@@ -77,23 +62,14 @@ export default function AmbientVideo({
         playsInline
         preload="auto"
         className={cn(
-          "w-full h-full object-cover transition-opacity duration-1000 ease-in-out will-change-[opacity,filter] transform-gpu",
+          "absolute inset-0 w-full h-full object-cover transform-gpu will-change-transform",
           blur
         )}
-        style={{
-          opacity: opacity,
-        }}
+        style={{ opacity }}
       />
-
-      {/* Subtle overlay shading & color grading to preserve contrast */}
-      <div
-        className={cn(
-          "absolute inset-0 w-full h-full transition-colors duration-500",
-          overlayColor
-        )}
-      />
-      <div className="absolute inset-0 w-full h-full bg-gradient-to-t from-[#06070A] via-transparent to-[#06070A] opacity-60" />
-      <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-[#06070A] via-transparent to-[#06070A] opacity-60" />
+      {/* Very subtle vignette only — no dark blanket */}
+      <div className="absolute inset-0 bg-gradient-to-t from-[#06070A]/70 via-transparent to-[#06070A]/40 pointer-events-none" />
+      <div className="absolute inset-0 bg-gradient-to-r from-[#06070A]/30 via-transparent to-[#06070A]/30 pointer-events-none" />
     </div>
   );
 }
