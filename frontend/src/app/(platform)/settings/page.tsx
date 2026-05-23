@@ -384,7 +384,7 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="flex h-[calc(100vh-3.5rem)] bg-rr-bg relative">
+    <div className="flex h-[calc(100vh-3.5rem)] bg-transparent relative">
       {/* Toast Feedback Notification Banner */}
       {saveMessage && (
         <div className="absolute top-6 right-6 z-[9999] flex items-center gap-2 bg-rr-surface border border-rr-green/30 text-rr-green font-mono text-[11px] px-4 py-2.5 rounded-lg shadow-[0_4px_20px_rgba(103,247,177,0.15)] animate-scale-in">

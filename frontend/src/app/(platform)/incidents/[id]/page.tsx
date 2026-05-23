@@ -354,7 +354,7 @@ export default function IncidentDetailPage({ params }: PageProps) {
   ];
 
   return (
-    <div className="flex flex-col h-full min-h-screen bg-rr-bg">
+    <div className="flex flex-col h-full min-h-screen bg-transparent">
       {/* ── Header ── */}
       <div className="sticky top-0 z-10 bg-rr-surface border-b border-rr-border px-6 py-3.5">
         <div className="flex items-center gap-3 flex-wrap">
@@ -429,10 +429,10 @@ export default function IncidentDetailPage({ params }: PageProps) {
           {/* Affected Services */}
           <section>
             <div className="font-mono text-[9px] text-rr-muted uppercase tracking-widest mb-2.5">
-              Affected Services ({incident.affectedServices.length})
+              Affected Services ({(incident.affectedServices || [incident.service]).length})
             </div>
             <div className="flex flex-col gap-1">
-              {incident.affectedServices.map((svc) => (
+              {(incident.affectedServices || [incident.service]).map((svc) => (
                 <div
                   key={svc}
                   className="flex items-center gap-1.5 font-mono text-[11px] text-rr-muted px-2 py-1 bg-rr-bg border border-rr-border rounded"

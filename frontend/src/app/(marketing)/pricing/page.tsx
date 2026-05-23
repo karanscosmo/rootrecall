@@ -1,17 +1,15 @@
 "use client";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import Logo from "@/components/ui/Logo";
 
 export default function PricingPage() {
   return (
     <div className="min-h-screen bg-rr-bg text-rr-text">
       <nav className="fixed top-0 inset-x-0 h-16 border-b border-rr-border bg-rr-bg/80 backdrop-blur z-50 flex items-center justify-between px-6 lg:px-12">
-        <Link href="/" className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-rr-green/15 border border-rr-green/30 flex items-center justify-center">
-            <span className="material-symbols-outlined text-rr-green" style={{ fontSize: 18, fontVariationSettings: "'FILL' 1" }}>radar</span>
-          </div>
-          <span className="font-semibold text-lg text-rr-text tracking-tight">RootRecall</span>
-        </Link>
+        <div className="flex items-center">
+          <Logo size="navbar" className="hover:opacity-80 transition-opacity" />
+        </div>
         <div className="flex items-center gap-4">
           <Link href="/login" className="font-mono text-[13px] text-rr-muted hover:text-rr-text">Login</Link>
         </div>
@@ -27,7 +25,7 @@ export default function PricingPage() {
           {[
             {
               name: "Starter",
-              price: "$0",
+              price: "₹0",
               desc: "Perfect for small teams getting started with observability.",
               features: ["Up to 3 users", "10 incidents per month", "7-day telemetry history", "Basic dashboard", "Community support"],
               cta: "Start Free",
@@ -35,7 +33,7 @@ export default function PricingPage() {
             },
             {
               name: "Pro",
-              price: "$49",
+              price: "₹3,499",
               period: "/mo per user",
               desc: "Advanced intelligence for serious engineering teams.",
               features: ["Unlimited users", "Unlimited incidents", "1-year telemetry history", "AI Copilot RCA", "Cinematic Replay", "Automated Postmortems", "Priority support"],
@@ -45,7 +43,7 @@ export default function PricingPage() {
             },
             {
               name: "Enterprise",
-              price: "Custom",
+              price: "Custom Pricing",
               desc: "Security and scale for large organizations.",
               features: ["Everything in Pro", "Single Sign-On (SSO)", "Custom SLAs", "On-prem deployment", "Dedicated success manager", "Custom integrations"],
               cta: "Contact Sales",

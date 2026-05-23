@@ -26,7 +26,7 @@ function PlatformShell({ children }: { children: React.ReactNode }) {
     async function verify() {
       const ok = await checkSession();
       // Define public platform routes
-      const isPublic = pathname === "/dashboard" || pathname === "/demo";
+      const isPublic = pathname === "/dashboard" || pathname === "/demo" || pathname === "/docs";
       if (!ok && !isPublic) {
         window.location.href = "/login";
       } else {
@@ -37,13 +37,13 @@ function PlatformShell({ children }: { children: React.ReactNode }) {
   }, [pathname, checkSession]);
 
   // Determine ambient video opacity based on the active route
-  let videoOpacity = 0.02; // default subtle telemetry motion for dashboard and health
+  let videoOpacity = 0.15; // default subtle telemetry motion for dashboard and health
   if (pathname.includes("/replay")) {
-    videoOpacity = 0.045; // cinematic infrastructure ambience
+    videoOpacity = 0.25; // cinematic infrastructure ambience
   } else if (pathname.includes("/copilot")) {
-    videoOpacity = 0.035; // operational intelligence feel
+    videoOpacity = 0.20; // operational intelligence feel
   } else if (pathname.includes("/settings")) {
-    videoOpacity = 0.015; // extra clean backdrop for settings
+    videoOpacity = 0.10; // extra clean backdrop for settings
   }
 
   if (authLoading) {

@@ -31,17 +31,18 @@ export default function AmbientVideo({
     };
     mediaQuery.addEventListener("change", handleMotionChange);
 
-    // Force play the video with direct src injection
-    if (videoRef.current && !mediaQuery.matches) {
-      videoRef.current.play().catch((err) => {
-        console.warn("Ambient video autoplay was blocked or failed: ", err);
-      });
-    }
-
     return () => {
       mediaQuery.removeEventListener("change", handleMotionChange);
     };
   }, []);
+
+  useEffect(() => {
+    if (isMounted && videoRef.current && !prefersReducedMotion) {
+      videoRef.current.play().catch((err) => {
+        console.warn("Ambient video autoplay was blocked or failed: ", err);
+      });
+    }
+  }, [isMounted, prefersReducedMotion]);
 
   if (!isMounted) return null;
 

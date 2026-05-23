@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useStore } from "@/store";
 import { cn } from "@/lib/utils";
 
@@ -65,10 +66,14 @@ export default function TopBar() {
           )}
         </button>
 
-        {/* Help */}
-        <button className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-white/5 transition-colors text-rr-muted hover:text-rr-text">
+        {/* Help / Documentation */}
+        <Link
+          href="/docs"
+          className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-white/5 transition-colors text-rr-muted hover:text-rr-text"
+          title="Documentation"
+        >
           <span className="material-symbols-outlined" style={{ fontSize: 18 }}>help_outline</span>
-        </button>
+        </Link>
       </div>
     </header>
   );

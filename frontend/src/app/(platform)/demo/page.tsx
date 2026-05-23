@@ -105,7 +105,7 @@ export default function DemoPage() {
   const stepMeta = PHASE_META[phase];
 
   return (
-    <div className="flex flex-col h-full bg-rr-bg relative overflow-hidden">
+    <div className="flex flex-col h-full bg-transparent relative overflow-hidden">
       {/* Grid bg */}
       <div className="absolute inset-0 opacity-[0.03]"
         style={{ backgroundImage: "radial-gradient(rgba(103,247,177,1) 1px, transparent 1px)", backgroundSize: "28px 28px" }} />

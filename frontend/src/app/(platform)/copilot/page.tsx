@@ -475,7 +475,7 @@ export default function CopilotPage() {
       </aside>
 
       {/* ── Center: Chat ─────────────────────────────────────────────────────── */}
-      <div className="flex-1 flex flex-col relative bg-rr-bg min-w-0 overflow-hidden">
+      <div className="flex-1 flex flex-col relative bg-transparent min-w-0 overflow-hidden">
         {/* Message feed */}
         <div className="flex-1 overflow-y-auto p-6 pb-2">
           {messages.map((msg) => (

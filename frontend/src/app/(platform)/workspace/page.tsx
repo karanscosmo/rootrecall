@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 
 export default function WorkspacePage() {
   return (
-    <div className="flex h-full bg-rr-bg">
+    <div className="flex h-full bg-transparent">
       <div className="flex-1 flex flex-col p-8 overflow-y-auto">
         <div className="flex items-center justify-between mb-8">
           <h1 className="text-2xl font-semibold text-rr-text tracking-tight">Team Workspace</h1>

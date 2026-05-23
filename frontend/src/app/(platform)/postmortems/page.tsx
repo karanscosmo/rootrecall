@@ -105,7 +105,7 @@ export default function PostmortemsPage() {
   );
 
   return (
-    <div className="flex h-full bg-rr-bg">
+    <div className="flex h-full bg-transparent">
       {/* Left: List */}
       <div className="w-80 border-r border-rr-border bg-rr-surface flex flex-col shrink-0">
         {/* Header */}
@@ -192,7 +192,7 @@ export default function PostmortemsPage() {
       {selectedPM ? (
         <div className="flex-1 flex overflow-hidden">
           {/* Document */}
-          <div className="flex-1 overflow-y-auto bg-rr-bg p-8">
+          <div className="flex-1 overflow-y-auto bg-transparent p-8">
             {/* AI generated badge */}
             <div className="flex items-center gap-2 mb-6">
               <div className="flex items-center gap-2 bg-rr-surface border border-rr-border rounded-full px-3 py-1.5">

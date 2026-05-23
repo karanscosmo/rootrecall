@@ -244,7 +244,7 @@ export default function IncidentsPage() {
   const now = new Date();
 
   return (
-    <div className="flex h-full min-h-screen bg-rr-bg">
+    <div className="flex h-full min-h-screen bg-transparent">
       {/* ── Left Column: Main incident list ── */}
       <div className="flex-1 flex flex-col px-6 py-5 min-w-0">
         {/* Header */}
