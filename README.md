@@ -6,6 +6,8 @@ RootRecall is an AI-native incident intelligence platform built for modern engin
 
 Designed with an enterprise-first mindset, RootRecall combines AI-assisted root cause analysis, incident replay, telemetry correlation, and operational memory into a unified experience.
 
+![RootRecall Landing Page](docs/landing.png)
+
 ![RootRecall Dashboard](docs/dashboard.png)
 
 ---
