@@ -1,14 +1,31 @@
 "use client";
+import { useState } from "react";
+import Link from "next/link";
 import { cn } from "@/lib/utils";
 
 export default function WorkspacePage() {
+  const [inviteText, setInviteText] = useState("Invite Member");
+
+  const handleInvite = () => {
+    setInviteText("Invite link copied!");
+    setTimeout(() => setInviteText("Invite Member"), 2000);
+  };
+
   return (
     <div className="flex h-full bg-transparent">
       <div className="flex-1 flex flex-col p-8 overflow-y-auto">
         <div className="flex items-center justify-between mb-8">
           <h1 className="text-2xl font-semibold text-rr-text tracking-tight">Team Workspace</h1>
-          <button className="bg-rr-green text-rr-bg font-mono text-[12px] font-semibold px-4 py-2 rounded-md hover:opacity-90 transition-opacity">
-            Invite Member
+          <button 
+            onClick={handleInvite}
+            className={cn(
+              "font-mono text-[12px] font-semibold px-4 py-2 rounded-md hover:opacity-90 transition-all",
+              inviteText === "Invite Member" 
+                ? "bg-rr-green text-rr-bg" 
+                : "bg-rr-bg border border-rr-green text-rr-green"
+            )}
+          >
+            {inviteText}
           </button>
         </div>
 
@@ -64,18 +81,28 @@ export default function WorkspacePage() {
             <div className="bg-rr-surface border border-rr-border rounded-xl p-6">
               <div className="space-y-6">
                 {[
-                  { text: "Alex assigned INC-8241", time: "10m ago", icon: "person_add" },
-                  { text: "Maya generated postmortem for INC-8150", time: "1h ago", icon: "auto_awesome" },
-                  { text: "Jordan reviewed replay for INC-8180", time: "2h ago", icon: "play_circle" },
+                  { text: "Alex assigned INC-8241", time: "10m ago", icon: "person_add", link: null },
+                  { text: "Maya generated postmortem for INC-8150", time: "1h ago", icon: "auto_awesome", link: "/postmortems" },
+                  { text: "Jordan reviewed replay for INC-8180", time: "2h ago", icon: "play_circle", link: "/replay" },
                 ].map((act, i) => (
-                  <div key={i} className="flex gap-4">
-                    <div className="w-8 h-8 rounded-lg bg-rr-bg border border-rr-border flex items-center justify-center shrink-0">
-                      <span className="material-symbols-outlined text-rr-muted" style={{ fontSize: 16 }}>{act.icon}</span>
+                  <div key={i} className="flex gap-4 items-center justify-between group">
+                    <div className="flex gap-4 items-center">
+                      <div className="w-8 h-8 rounded-lg bg-rr-bg border border-rr-border flex items-center justify-center shrink-0">
+                        <span className="material-symbols-outlined text-rr-muted" style={{ fontSize: 16 }}>{act.icon}</span>
+                      </div>
+                      <div>
+                        <div className="font-mono text-[12px] text-rr-text">{act.text}</div>
+                        <div className="font-mono text-[10px] text-rr-muted mt-1">{act.time}</div>
+                      </div>
                     </div>
-                    <div>
-                      <div className="font-mono text-[12px] text-rr-text">{act.text}</div>
-                      <div className="font-mono text-[10px] text-rr-muted mt-1">{act.time}</div>
-                    </div>
+                    {act.link && (
+                      <Link 
+                        href={act.link} 
+                        className="opacity-0 group-hover:opacity-100 transition-opacity bg-rr-green/10 text-rr-green border border-rr-green/20 px-3 py-1 rounded font-mono text-[10px] hover:bg-rr-green/20"
+                      >
+                        View {act.icon === 'play_circle' ? 'Replay' : 'Postmortem'}
+                      </Link>
+                    )}
                   </div>
                 ))}
               </div>
