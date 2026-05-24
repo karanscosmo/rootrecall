@@ -111,18 +111,101 @@ const CHART_TABS: { id: ChartTab; label: string; key: keyof Metric; unit: string
   { id: 'errors',  label: 'Error Rate',  key: 'errorRate',  unit: '%' },
 ];
 
-  export default function DashboardPage() {
-  const router = useRouter();
-  const { incidents, aiMemories, metrics, viewMode, setViewMode, startLiveEngine, stopLiveEngine } = useStore();
-
-  const [chartTab, setChartTab] = useState<ChartTab>('latency');
+function Clock() {
   const [now, setNow] = useState(() => new Date());
-
-  // Keep live clock for durations
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(id);
   }, []);
+  return (
+    <div className="font-mono text-[11px] text-rr-muted bg-rr-surface border border-rr-border rounded px-3 py-1.5 shrink-0">
+      {now.toLocaleString('en-US', {
+        dateStyle: 'medium',
+        timeStyle: 'medium',
+        hour12: false,
+      })}
+    </div>
+  );
+}
+
+function LiveTelemetryChart() {
+  const metrics = useStore((s) => s.metrics);
+  const [chartTab, setChartTab] = useState<ChartTab>('latency');
+  const activeTab = CHART_TABS.find((t) => t.id === chartTab) ?? CHART_TABS[0];
+
+  const chartData = metrics.map((m) => ({
+    t: new Date(m.timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }),
+    value: m[activeTab.key] as number,
+  }));
+
+  return (
+    <div className="bg-rr-surface border border-rr-border rounded-lg p-5 space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="material-symbols-outlined text-rr-green" style={{ fontSize: 16, fontVariationSettings: "'FILL' 1" }}>
+            show_chart
+          </span>
+          <span className="font-mono text-[11px] uppercase tracking-widest text-rr-muted">
+            Live Telemetry
+          </span>
+          <span className="flex h-1.5 w-1.5 rounded-full bg-rr-green animate-pulse" />
+        </div>
+        <div className="flex items-center gap-1 bg-rr-bg border border-rr-border rounded-md p-0.5">
+          {CHART_TABS.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setChartTab(tab.id)}
+              className={cn(
+                'font-mono text-[10px] uppercase tracking-wider px-3 py-1 rounded transition-all duration-150',
+                chartTab === tab.id
+                  ? 'bg-rr-green/10 text-rr-green border border-rr-green/20'
+                  : 'text-rr-muted hover:text-rr-text',
+              )}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="h-52">
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart data={chartData} margin={{ top: 4, right: 4, left: -24, bottom: 0 }}>
+            <defs>
+              <linearGradient id="gradGreen" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#67F7B1" stopOpacity={0.2} />
+                <stop offset="95%" stopColor="#67F7B1" stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke="#1F2228" vertical={false} />
+            <XAxis dataKey="t" tick={{ fill: '#869489', fontSize: 9, fontFamily: 'JetBrains Mono, monospace' }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
+            <YAxis tick={{ fill: '#869489', fontSize: 9, fontFamily: 'JetBrains Mono, monospace' }} axisLine={false} tickLine={false} tickFormatter={(v) => `${v}${activeTab.unit}`} />
+            <Tooltip content={<ChartTooltip />} />
+            <Area type="monotone" dataKey="value" stroke="#67F7B1" strokeWidth={1.5} fill="url(#gradGreen)" dot={false} activeDot={{ r: 3, fill: '#67F7B1', stroke: '#06070A', strokeWidth: 1 }} animationDuration={400} />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+      {chartData.length > 0 && (
+        <div className="flex items-center gap-2 border-t border-rr-border pt-3">
+          <span className="font-mono text-[10px] text-rr-muted uppercase tracking-widest">
+            Current
+          </span>
+          <span className="font-mono text-sm text-rr-green font-bold">
+            {chartData[chartData.length - 1].value.toFixed(1)}{activeTab.unit}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function DashboardPage() {
+  const router = useRouter();
+  const incidents = useStore((s) => s.incidents);
+  const aiMemories = useStore((s) => s.aiMemories);
+  const viewMode = useStore((s) => s.viewMode);
+  const setViewMode = useStore((s) => s.setViewMode);
+  const startLiveEngine = useStore((s) => s.startLiveEngine);
+  const stopLiveEngine = useStore((s) => s.stopLiveEngine);
 
   // Start live engine on mount
   useEffect(() => {
@@ -133,14 +216,6 @@ const CHART_TABS: { id: ChartTab; label: string; key: keyof Metric; unit: string
   // ── Derived stats ────────────────────────────────────────────────────────
   const activeIncidents = incidents.filter((i) => i.status === 'active' || i.status === 'investigating');
   const activeCount = activeIncidents.length;
-
-  // ── Chart data ───────────────────────────────────────────────────────────
-  const activeTab = CHART_TABS.find((t) => t.id === chartTab) ?? CHART_TABS[0];
-
-  const chartData = metrics.map((m) => ({
-    t: new Date(m.timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }),
-    value: m[activeTab.key] as number,
-  }));
 
   // ── Navigate on row click ────────────────────────────────────────────────
   const gotoIncident = useCallback(
@@ -198,14 +273,7 @@ const CHART_TABS: { id: ChartTab; label: string; key: keyof Metric; unit: string
             </button>
           </div>
 
-          {/* Timestamp */}
-          <div className="font-mono text-[11px] text-rr-muted bg-rr-surface border border-rr-border rounded px-3 py-1.5 shrink-0">
-            {now.toLocaleString('en-US', {
-              dateStyle: 'medium',
-              timeStyle: 'medium',
-              hour12: false,
-            })}
-          </div>
+          <Clock />
         </div>
       </div>
 
@@ -269,93 +337,7 @@ const CHART_TABS: { id: ChartTab; label: string; key: keyof Metric; unit: string
           {/* ── Left column ────────────────────────────────────────────────── */}
           <div className="xl:col-span-2 space-y-6">
 
-            {/* Live Telemetry Chart */}
-            <div className="bg-rr-surface border border-rr-border rounded-lg p-5 space-y-4">
-              {/* Chart header */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span
-                    className="material-symbols-outlined text-rr-green"
-                    style={{ fontSize: 16, fontVariationSettings: "'FILL' 1" }}
-                  >
-                    show_chart
-                  </span>
-                  <span className="font-mono text-[11px] uppercase tracking-widest text-rr-muted">
-                    Live Telemetry
-                  </span>
-                  <span className="flex h-1.5 w-1.5 rounded-full bg-rr-green animate-pulse" />
-                </div>
-
-                {/* Tab switcher */}
-                <div className="flex items-center gap-1 bg-rr-bg border border-rr-border rounded-md p-0.5">
-                  {CHART_TABS.map((tab) => (
-                    <button
-                      key={tab.id}
-                      onClick={() => setChartTab(tab.id)}
-                      className={cn(
-                        'font-mono text-[10px] uppercase tracking-wider px-3 py-1 rounded transition-all duration-150',
-                        chartTab === tab.id
-                          ? 'bg-rr-green/10 text-rr-green border border-rr-green/20'
-                          : 'text-rr-muted hover:text-rr-text',
-                      )}
-                    >
-                      {tab.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Recharts area */}
-              <div className="h-52">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={chartData} margin={{ top: 4, right: 4, left: -24, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="gradGreen" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%"  stopColor="#67F7B1" stopOpacity={0.2} />
-                        <stop offset="95%" stopColor="#67F7B1" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#1F2228" vertical={false} />
-                    <XAxis
-                      dataKey="t"
-                      tick={{ fill: '#869489', fontSize: 9, fontFamily: 'JetBrains Mono, monospace' }}
-                      axisLine={false}
-                      tickLine={false}
-                      interval="preserveStartEnd"
-                    />
-                    <YAxis
-                      tick={{ fill: '#869489', fontSize: 9, fontFamily: 'JetBrains Mono, monospace' }}
-                      axisLine={false}
-                      tickLine={false}
-                      tickFormatter={(v) => `${v}${activeTab.unit}`}
-                    />
-                    <Tooltip content={<ChartTooltip />} />
-                    <Area
-                      type="monotone"
-                      dataKey="value"
-                      stroke="#67F7B1"
-                      strokeWidth={1.5}
-                      fill="url(#gradGreen)"
-                      dot={false}
-                      activeDot={{ r: 3, fill: '#67F7B1', stroke: '#06070A', strokeWidth: 1 }}
-                      animationDuration={400}
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-
-              {/* Latest value readout */}
-              {chartData.length > 0 && (
-                <div className="flex items-center gap-2 border-t border-rr-border pt-3">
-                  <span className="font-mono text-[10px] text-rr-muted uppercase tracking-widest">
-                    Current
-                  </span>
-                  <span className="font-mono text-sm text-rr-green font-bold">
-                    {chartData[chartData.length - 1].value.toFixed(1)}{activeTab.unit}
-                  </span>
-                </div>
-              )}
-            </div>
+            <LiveTelemetryChart />
 
             {/* Active Incidents Table */}
             <div className="bg-rr-surface border border-rr-border rounded-lg overflow-hidden">
@@ -452,97 +434,90 @@ const CHART_TABS: { id: ChartTab; label: string; key: keyof Metric; unit: string
           <div className="xl:col-span-1 space-y-6">
 
             {/* AI Copilot Insight card */}
-            <div
-              className="bg-rr-surface rounded-lg p-5 space-y-4"
-              style={{
-                border: '1px solid rgba(103,247,177,0.2)',
-                boxShadow: '0 0 24px rgba(103,247,177,0.06)',
-              }}
-            >
-              {/* Header */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span
-                    className="material-symbols-outlined text-rr-green"
-                    style={{ fontSize: 16, fontVariationSettings: "'FILL' 1" }}
-                  >
-                    psychology
-                  </span>
-                  <span className="font-mono text-[11px] uppercase tracking-widest text-rr-green">
-                    AI Copilot
+            {activeCount > 0 && activeIncidents[0] ? (
+              <div
+                className="bg-rr-surface rounded-lg p-5 space-y-4"
+                style={{
+                  border: '1px solid rgba(103,247,177,0.2)',
+                  boxShadow: '0 0 24px rgba(103,247,177,0.06)',
+                }}
+              >
+                {/* Header */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="material-symbols-outlined text-rr-green"
+                      style={{ fontSize: 16, fontVariationSettings: "'FILL' 1" }}
+                    >
+                      psychology
+                    </span>
+                    <span className="font-mono text-[11px] uppercase tracking-widest text-rr-green">
+                      AI Copilot
+                    </span>
+                  </div>
+                  <span className="ai-tag text-[10px]">
+                    <span
+                      className="material-symbols-outlined"
+                      style={{ fontSize: 10, fontVariationSettings: "'FILL' 1" }}
+                    >
+                      auto_awesome
+                    </span>
+                    Live
                   </span>
                 </div>
-                <span className="ai-tag text-[10px]">
+
+                {/* Insight body */}
+                <div className="space-y-3">
+                  <p className="text-[13px] text-rr-text leading-relaxed">
+                    Analyzing active incident:{' '}
+                    <span className="text-rr-green font-medium">
+                      {activeIncidents[0].title}
+                    </span>{' '}
+                    on{' '}
+                    <span className="font-mono text-[12px] text-rr-warn">{activeIncidents[0].service}</span>.
+                  </p>
+                  <p className="font-mono text-[11px] text-rr-muted leading-relaxed">
+                    {activeIncidents[0].rootCause || "Correlating logs and telemetry to identify the root cause. Awaiting further data..."}
+                  </p>
+                </div>
+
+                {/* Confidence bar */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono text-[10px] text-rr-muted uppercase tracking-wider">
+                      AI Confidence
+                    </span>
+                    <span className="font-mono text-[11px] text-rr-green font-bold">{activeIncidents[0].aiConfidence}%</span>
+                  </div>
+                  <div className="h-1.5 bg-rr-border rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-rr-green rounded-full"
+                      style={{ width: `${activeIncidents[0].aiConfidence}%`, boxShadow: '0 0 6px rgba(103,247,177,0.4)' }}
+                    />
+                  </div>
+                </div>
+
+                {/* Initiate Resolution CTA */}
+                <button
+                  className="w-full bg-rr-green text-rr-bg font-mono text-[12px] font-bold py-2.5 rounded-md transition-all duration-200 hover:brightness-110 active:scale-[0.98] flex items-center justify-center gap-2"
+                  style={{ boxShadow: '0 0 12px rgba(103,247,177,0.2)' }}
+                  onClick={() => router.push(`/incidents/${activeIncidents[0].id}`)}
+                >
                   <span
                     className="material-symbols-outlined"
-                    style={{ fontSize: 10, fontVariationSettings: "'FILL' 1" }}
+                    style={{ fontSize: 14, fontVariationSettings: "'FILL' 1" }}
                   >
-                    auto_awesome
+                    undo
                   </span>
-                  Live
-                </span>
+                  View Investigation
+                </button>
               </div>
-
-              {/* Insight body */}
-              <div className="space-y-3">
-                <p className="text-[13px] text-rr-text leading-relaxed">
-                  Root cause identified:{' '}
-                  <span className="text-rr-green font-medium">
-                    Redis Connection Pool Exhaustion
-                  </span>{' '}
-                  on{' '}
-                  <span className="font-mono text-[12px] text-rr-warn">cache-cluster-02</span>.
-                </p>
-                <p className="font-mono text-[11px] text-rr-muted leading-relaxed">
-                  Triggered by <span className="text-rr-text">auth-service v2.4.1</span> deploy
-                  introducing unpaginated query. Pattern matched INC-2023-08-12 with{' '}
-                  <span className="text-rr-green">91%</span> similarity.
-                </p>
+            ) : (
+              <div className="bg-rr-surface rounded-lg p-5 border border-rr-border flex flex-col items-center justify-center text-center gap-3 py-12">
+                <span className="material-symbols-outlined text-rr-green" style={{ fontSize: 24 }}>verified_user</span>
+                <p className="font-mono text-[11px] text-rr-muted">No active anomalies requiring AI analysis.</p>
               </div>
-
-              {/* Confidence bar */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <span className="font-mono text-[10px] text-rr-muted uppercase tracking-wider">
-                    AI Confidence
-                  </span>
-                  <span className="font-mono text-[11px] text-rr-green font-bold">94%</span>
-                </div>
-                <div className="h-1.5 bg-rr-border rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-rr-green rounded-full"
-                    style={{ width: '94%', boxShadow: '0 0 6px rgba(103,247,177,0.4)' }}
-                  />
-                </div>
-              </div>
-
-              {/* Recommended fix */}
-              <div className="bg-rr-bg border border-rr-border rounded-md p-3 space-y-1">
-                <p className="font-mono text-[10px] text-rr-muted uppercase tracking-wider">
-                  Recommended Action
-                </p>
-                <p className="font-mono text-[11px] text-rr-text leading-relaxed">
-                  Rollback <span className="text-rr-warn">auth-service</span> to{' '}
-                  <span className="text-rr-green">v2.3.9</span> and flush Redis connection pool
-                  on cache-cluster-02.
-                </p>
-              </div>
-
-              {/* Initiate Rollback CTA */}
-              <button
-                className="w-full bg-rr-green text-rr-bg font-mono text-[12px] font-bold py-2.5 rounded-md transition-all duration-200 hover:brightness-110 active:scale-[0.98] flex items-center justify-center gap-2"
-                style={{ boxShadow: '0 0 12px rgba(103,247,177,0.2)' }}
-                onClick={() => router.push('/incidents/INC-8241')}
-              >
-                <span
-                  className="material-symbols-outlined"
-                  style={{ fontSize: 14, fontVariationSettings: "'FILL' 1" }}
-                >
-                  undo
-                </span>
-                Initiate Rollback
-              </button>
-            </div>
+            )}
 
             {/* AI Memory Panel */}
             <div className="bg-rr-surface border border-rr-border rounded-lg overflow-hidden">
@@ -775,9 +750,8 @@ const CHART_TABS: { id: ChartTab; label: string; key: keyof Metric; unit: string
   );
 }
 
-// ─── Deployment list (inline sub-component) ───────────────────────────────────
 function DeploymentList() {
-  const { deployments } = useStore();
+  const deployments = useStore((s) => s.deployments);
 
   const statusStyle: Record<string, string> = {
     success:  'text-rr-green',

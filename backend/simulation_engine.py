@@ -83,7 +83,7 @@ class SimulationEngine:
         self.listeners = [] # List of async queues for broadcasting updates
         self.task = None
 
-    def _update_db_incident_status(self, incident_id_str, status, root_cause=None, confidence=None, remediation_steps=None):
+    def _update_db_incident_status_sync(self, incident_id_str, status, root_cause=None, confidence=None, remediation_steps=None):
         try:
             db = SessionLocal()
             inc_id = int(incident_id_str.replace("INC-", ""))
@@ -100,6 +100,9 @@ class SimulationEngine:
             db.close()
         except Exception as e:
             logger.error("Database update error", error=str(e))
+
+    async def _update_db_incident_status(self, incident_id_str, status, root_cause=None, confidence=None, remediation_steps=None):
+        await asyncio.to_thread(self._update_db_incident_status_sync, incident_id_str, status, root_cause, confidence, remediation_steps)
 
     def start(self):
         if self.task is None:
@@ -129,7 +132,7 @@ class SimulationEngine:
         await self.broadcast("status_change", {"state": self.state, "message": f"Deployment to {self.current_scenario['service']} initiated."})
         return True
 
-    def _is_auto_remediate_enabled(self):
+    def _is_auto_remediate_enabled_sync(self):
         try:
             db = SessionLocal()
             s = db.query(SystemSettings).filter(SystemSettings.key == "ai_preferences").first()
@@ -140,6 +143,9 @@ class SimulationEngine:
             return val
         except Exception:
             return False
+
+    async def _is_auto_remediate_enabled(self):
+        return await asyncio.to_thread(self._is_auto_remediate_enabled_sync)
 
     async def _run_loop(self):
         healthy_duration = 0
@@ -174,7 +180,7 @@ class SimulationEngine:
                         "severity": self.current_scenario["severity"],
                         "status": "active"
                     }
-                    self._update_db_incident_status(inc_id, "active")
+                    await self._update_db_incident_status(inc_id, "active")
                     await self.broadcast("incident_created", self.active_incident)
                     await self.broadcast("status_change", {"state": self.state, "message": "Anomaly detected during deployment."})
             
@@ -195,7 +201,7 @@ class SimulationEngine:
                     }
                     self.active_incident.update(rca)
                     self.state = "RCA_GENERATED"
-                    self._update_db_incident_status(
+                    await self._update_db_incident_status(
                         self.active_incident["id"],
                         "active",
                         root_cause=rca.get("root_cause"),
@@ -215,7 +221,7 @@ class SimulationEngine:
                  rca_generated_duration += 2
                  if rca_generated_duration >= 14:
                      rca_generated_duration = 0
-                     if self._is_auto_remediate_enabled():
+                     if await self._is_auto_remediate_enabled():
                          await self.apply_remediation()
 
             elif self.state == "REMEDIATING":
@@ -228,7 +234,7 @@ class SimulationEngine:
                 if self.metrics["latency"] < 100:
                     self.state = "RESOLVED"
                     self.active_incident["status"] = "resolved"
-                    self._update_db_incident_status(self.active_incident["id"], "resolved")
+                    await self._update_db_incident_status(self.active_incident["id"], "resolved")
                     await self.broadcast("incident_resolved", self.active_incident)
                     await self.broadcast("status_change", {"state": self.state, "message": "System stabilized."})
                     
@@ -294,7 +300,7 @@ class SimulationEngine:
     async def apply_remediation(self):
         if self.state == "RCA_GENERATED":
             self.state = "REMEDIATING"
-            self._update_db_incident_status(self.active_incident["id"], "mitigated")
+            await self._update_db_incident_status(self.active_incident["id"], "mitigated")
             await self.broadcast("status_change", {"state": self.state, "message": "Applying AI suggested remediation."})
             return True
         return False

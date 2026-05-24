@@ -31,7 +31,7 @@ export default function TopBar() {
     <header
       className={cn(
         "fixed top-0 right-0 h-14 z-40 bg-rr-bg/90 backdrop-blur-md border-b border-rr-border flex items-center justify-between px-6 transition-all duration-300 ease-in-out",
-        sidebarCollapsed ? "w-[calc(100%-4rem)]" : "w-[calc(100%-16rem)]"
+        sidebarCollapsed ? "w-full md:w-[calc(100%-4rem)]" : "w-full md:w-[calc(100%-16rem)]"
       )}
     >
       {/* Left side: Toggle + Search */}

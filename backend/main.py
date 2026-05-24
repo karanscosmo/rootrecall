@@ -12,7 +12,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from jose import JWTError, jwt
-from passlib.context import CryptContext
+import bcrypt
 from datetime import datetime, timedelta
 
 # ─── Secure Logging Config ───
@@ -26,7 +26,7 @@ structlog.configure(
 logger = structlog.get_logger()
 
 
-from database import engine, Base, SessionLocal, Incident, Postmortem, OperationalMemory, SystemSettings, seed_database
+from database import engine, Base, SessionLocal, Incident, Postmortem, OperationalMemory, SystemSettings, seed_database, User
 from ai_orchestrator import ai_engine
 from simulation_engine import SimulationEngine
 
@@ -56,7 +56,15 @@ SECRET_KEY = os.environ.get("SECRET_KEY", "supersecret-default")
 ALGORITHM = os.environ.get("ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.environ.get("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+def hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    try:
+        return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
+    except Exception:
+        return False
+
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 
 def create_access_token(data: dict):
@@ -65,7 +73,14 @@ def create_access_token(data: dict):
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
-async def get_current_user(token: str = Depends(oauth2_scheme)):
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -78,7 +93,15 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
             raise credentials_exception
     except JWTError:
         raise credentials_exception
-    return email
+    user = db.query(User).filter(User.email == email).first()
+    if user is None:
+        raise credentials_exception
+    return user
+
+async def get_current_admin(current_user: User = Depends(get_current_user)):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Not enough privileges")
+    return current_user
 
 # ─── Router ───
 router = APIRouter(prefix="/api/v1", dependencies=[Depends(get_current_user)])
@@ -90,13 +113,6 @@ simulation = SimulationEngine(ai_engine)
 async def startup_event():
     seed_database()
     simulation.start()
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 # ─── Schemas ───
 
@@ -136,7 +152,7 @@ def health_check(request: Request):
 
 @router.post("/demo/trigger")
 @limiter.limit("5/minute")
-async def trigger_demo(request: Request):
+async def trigger_demo(request: Request, current_user: User = Depends(get_current_admin)):
     success = await simulation.trigger_demo()
     if not success:
         raise HTTPException(status_code=400, detail="Cannot trigger demo. System not in HEALTHY state.")
@@ -144,7 +160,7 @@ async def trigger_demo(request: Request):
 
 @router.post("/demo/remediate")
 @limiter.limit("5/minute")
-async def apply_remediation(request: Request):
+async def apply_remediation(request: Request, current_user: User = Depends(get_current_admin)):
     success = await simulation.apply_remediation()
     if not success:
         raise HTTPException(status_code=400, detail="Cannot apply remediation at this state.")
@@ -268,7 +284,7 @@ def get_postmortems(request: Request, db: Session = Depends(get_db)):
 
 @router.post("/postmortems")
 @limiter.limit("10/minute")
-def create_postmortem(request: Request, pm_data: PostmortemCreate, db: Session = Depends(get_db)):
+def create_postmortem(request: Request, pm_data: PostmortemCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_admin)):
     try:
         clean_inc_id = int(pm_data.incidentId.replace("INC-", ""))
     except ValueError:
@@ -325,7 +341,7 @@ def get_settings(request: Request, db: Session = Depends(get_db)):
 
 @router.post("/settings")
 @limiter.limit("10/minute")
-def update_settings(request: Request, req: SettingsUpdate, db: Session = Depends(get_db)):
+def update_settings(request: Request, req: SettingsUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_admin)):
     s = db.query(SystemSettings).filter(SystemSettings.key == req.key).first()
     if s:
         s.value = req.value
@@ -338,24 +354,44 @@ def update_settings(request: Request, req: SettingsUpdate, db: Session = Depends
 @auth_router.post("/login")
 @limiter.limit("5/minute")
 def login(request: Request, req: LoginRequest, db: Session = Depends(get_db)):
-    if req.email == "admin@rootrecall.com" and req.password == "securepassword123":
-        token = create_access_token({"sub": req.email})
-        return {"access_token": token, "token_type": "bearer", "user": {"email": req.email, "name": "Admin"}}
-    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+    user = db.query(User).filter(User.email == req.email).first()
+    if not user or not verify_password(req.password, user.hashed_password):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+    token = create_access_token({"sub": user.email})
+    return {"access_token": token, "token_type": "bearer", "user": {"email": user.email, "name": user.name, "role": user.role}}
 
 @auth_router.post("/google")
 @limiter.limit("10/minute")
-def google_login(request: Request, req: GoogleLoginRequest):
+def google_login(request: Request, req: GoogleLoginRequest, db: Session = Depends(get_db)):
     if req.secret != SECRET_KEY:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid internal secret")
-    token = create_access_token({"sub": req.email})
-    return {"access_token": token, "token_type": "bearer", "user": {"email": req.email, "name": req.name}}
+    user = db.query(User).filter(User.email == req.email).first()
+    if not user:
+        user = User(email=req.email, name=req.name, company="", role="user", hashed_password=hash_password("google-auth-no-pass"))
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    token = create_access_token({"sub": user.email})
+    return {"access_token": token, "token_type": "bearer", "user": {"email": user.email, "name": user.name, "role": user.role}}
 
 @auth_router.post("/signup")
 @limiter.limit("5/minute")
-def signup(request: Request, req: SignupRequest):
-    token = create_access_token({"sub": req.email})
-    return {"access_token": token, "token_type": "bearer", "user": {"email": req.email, "name": req.name}}
+def signup(request: Request, req: SignupRequest, db: Session = Depends(get_db)):
+    existing = db.query(User).filter(User.email == req.email).first()
+    if existing:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered")
+    user = User(
+        email=req.email,
+        name=req.name,
+        company=req.company,
+        role="user",
+        hashed_password=hash_password(req.password)
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    token = create_access_token({"sub": user.email})
+    return {"access_token": token, "token_type": "bearer", "user": {"email": user.email, "name": user.name, "role": user.role}}
 
 app.include_router(auth_router)
 app.include_router(router)
@@ -387,5 +423,9 @@ async def websocket_endpoint(websocket: WebSocket):
             event = await queue.get()
             await websocket.send_text(json.dumps(event))
     except WebSocketDisconnect:
-        simulation.unsubscribe(queue)
         logger.info("Client disconnected from telemetry stream")
+    except Exception as e:
+        logger.error(f"WebSocket error: {e}")
+    finally:
+        simulation.unsubscribe(queue)
+        logger.info("Cleaned up websocket queue")

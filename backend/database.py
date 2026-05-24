@@ -42,6 +42,17 @@ class Postmortem(Base):
     prevention_items = Column(JSON)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String, unique=True, index=True)
+    hashed_password = Column(String)
+    name = Column(String)
+    company = Column(String)
+    role = Column(String, default="admin")
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
 class OperationalMemory(Base):
     __tablename__ = "operational_memory"
 
@@ -65,6 +76,19 @@ def seed_database():
     db = SessionLocal()
     try:
         # Check if database is empty
+        if db.query(User).count() == 0:
+            logger.info("Seeding admin user...")
+            import bcrypt
+            hashed_pw = bcrypt.hashpw("securepassword123".encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+            admin = User(
+                email="admin@rootrecall.com",
+                hashed_password=hashed_pw,
+                name="Admin User",
+                company="RootRecall AI",
+                role="admin"
+            )
+            db.add(admin)
+
         if db.query(Incident).count() == 0:
             logger.info("Seeding database with default incidents...")
             incidents_to_seed = [

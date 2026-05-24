@@ -63,7 +63,7 @@ function PlatformShell({ children }: { children: React.ReactNode }) {
       <div
         className={cn(
           "flex-1 flex flex-col min-h-screen overflow-hidden transition-all duration-300 ease-in-out z-10",
-          sidebarCollapsed ? "ml-16" : "ml-64"
+          sidebarCollapsed ? "ml-0 md:ml-16" : "ml-0 md:ml-64"
         )}
       >
         <TopBar />

@@ -465,7 +465,8 @@ function TopologyEdgesSVG({
 
 export default function ReplayPage() {
   // store
-  const { incidents, setActiveReplay } = useStore();
+  const incidents = useStore((s) => s.incidents);
+  const setActiveReplay = useStore((s) => s.setActiveReplay);
   const activeIncident = incidents.find((i) => i.id === "INC-8241");
 
   // playback state

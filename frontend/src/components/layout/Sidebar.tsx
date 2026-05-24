@@ -31,7 +31,7 @@ export default function Sidebar() {
     <nav
       className={cn(
         "fixed left-0 top-0 h-screen bg-rr-surface border-r border-rr-border flex flex-col z-50 shrink-0 transition-all duration-300 ease-in-out",
-        sidebarCollapsed ? "w-16" : "w-64"
+        sidebarCollapsed ? "w-0 -translate-x-full md:w-16 md:translate-x-0" : "w-64 translate-x-0"
       )}
     >
       {/* Brand */}

@@ -239,7 +239,11 @@ function ChatMessageBubble({
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function CopilotPage() {
-  const { incidents, services, metrics, aiMemories, selectedIncidentId, selectIncident } = useStore();
+  const incidents = useStore((s) => s.incidents);
+  const services = useStore((s) => s.services);
+  const aiMemories = useStore((s) => s.aiMemories);
+  const selectedIncidentId = useStore((s) => s.selectedIncidentId);
+  const selectIncident = useStore((s) => s.selectIncident);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   
@@ -305,7 +309,8 @@ export default function CopilotPage() {
       // Simulate AI response delay
       await new Promise((r) => setTimeout(r, 1200));
       
-      const lastMetric = metrics[metrics.length - 1];
+      const currentMetrics = useStore.getState().metrics;
+      const lastMetric = currentMetrics[currentMetrics.length - 1];
       const p99 = lastMetric?.latencyP99.toFixed(0) || "45";
       
       // Dynamic response based on context
@@ -340,7 +345,7 @@ export default function CopilotPage() {
       setMessages((prev) => [...prev, aiMsg]);
       setIsLoading(false);
     },
-    [isLoading, contextIncident, metrics, aiMemories]
+    [isLoading, contextIncident, aiMemories]
   );
 
   const handleSubmit = (e: React.FormEvent) => {
