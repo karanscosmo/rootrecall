@@ -16,6 +16,7 @@
     "dompurify": "^3.4.5",
     "framer-motion": "^12.40.0",
     "lucide-react": "^1.16.0",
+    "material-symbols": "^0.44.9",
     "next": "16.2.6",
     "next-auth": "^4.24.14",
     "react": "19.2.4",
