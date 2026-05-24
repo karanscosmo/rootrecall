@@ -263,7 +263,7 @@ export default function CopilotPage() {
     {
       id: "msg-2",
       role: "ai",
-      content: `I'm analyzing ${contextIncident.id} (${contextIncident.title}).\n\n**Current Status:** ${contextIncident.status.toUpperCase()}\n**Affected Services:** ${contextIncident.affectedServices.join(', ')}\n\n${contextIncident.rootCause ? `**Root Cause Analysis:** ${contextIncident.rootCause}` : 'I am currently correlating logs and metrics to determine the root cause.'}`,
+      content: `I'm analyzing ${contextIncident.id} (${contextIncident.title}).\n\n**Current Status:** ${contextIncident.status.toUpperCase()}\n**Affected Services:** ${(contextIncident.affectedServices || [contextIncident.service || 'Unknown']).join(', ')}\n\n${contextIncident.rootCause ? `**Root Cause Analysis:** ${contextIncident.rootCause}` : 'I am currently correlating logs and metrics to determine the root cause.'}`,
       timestamp: new Date(),
       confidence: contextIncident.aiConfidence,
     }
@@ -572,7 +572,7 @@ export default function CopilotPage() {
               </span>
             </h3>
             <div className="space-y-2">
-              {contextIncident?.affectedServices?.map((svcName) => {
+              {(contextIncident?.affectedServices || [contextIncident?.service || 'Unknown']).map((svcName) => {
                 const svc = services.find(s => s.id === svcName || s.name === svcName);
                 const status = svc?.status || "critical";
                 return (
