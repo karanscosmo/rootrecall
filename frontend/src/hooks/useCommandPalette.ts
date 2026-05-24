@@ -71,7 +71,7 @@ export function useCommandActions() {
             const apiBase = typeof window !== 'undefined'
               ? (process.env.NEXT_PUBLIC_API_URL || `http://${window.location.hostname}:8000`)
               : 'http://localhost:8000';
-            await fetch(`${apiBase}/api/demo/trigger`, { method: "POST" });
+            await fetch(`${apiBase}/demo/trigger`, { method: "POST" });
             close();
           } catch (e) {
             console.error("Failed to trigger demo", e);

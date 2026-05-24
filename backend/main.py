@@ -1,15 +1,39 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Depends
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Depends, APIRouter, Request, status
+from fastapi.security import OAuth2PasswordBearer
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, EmailStr
 from sqlalchemy.orm import Session
 import asyncio
 import json
+import os
+import secure
+import structlog
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from jose import JWTError, jwt
+from passlib.context import CryptContext
+from datetime import datetime, timedelta
+
+# ─── Secure Logging Config ───
+structlog.configure(
+    processors=[
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.stdlib.add_log_level,
+        structlog.processors.JSONRenderer(sort_keys=True)
+    ]
+)
+logger = structlog.get_logger()
+
 
 from database import engine, Base, SessionLocal, Incident, Postmortem, OperationalMemory, SystemSettings, seed_database
 from ai_orchestrator import ai_engine
 from simulation_engine import SimulationEngine
 
+limiter = Limiter(key_func=get_remote_address)
 app = FastAPI(title="RootRecall API")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
@@ -18,6 +42,47 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+secure_headers = secure.Secure()
+
+@app.middleware("http")
+async def set_secure_headers(request, call_next):
+    response = await call_next(request)
+    secure_headers.set_headers(response)
+    return response
+
+# ─── Auth ───
+SECRET_KEY = os.environ.get("SECRET_KEY", "supersecret-default")
+ALGORITHM = os.environ.get("ALGORITHM", "HS256")
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.environ.get("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
+
+def create_access_token(data: dict):
+    to_encode = data.copy()
+    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+async def get_current_user(token: str = Depends(oauth2_scheme)):
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email: str = payload.get("sub")
+        if email is None:
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
+    return email
+
+# ─── Router ───
+router = APIRouter(prefix="/api/v1", dependencies=[Depends(get_current_user)])
+auth_router = APIRouter(prefix="/api/v1/auth")
 
 simulation = SimulationEngine(ai_engine)
 
@@ -36,49 +101,53 @@ def get_db():
 # ─── Schemas ───
 
 class PostmortemCreate(BaseModel):
-    incidentId: str
-    executiveSummary: str
-    rootCauseAnalysis: str
-    timeline: list = []
-    preventionItems: list = []
+    incidentId: str = Field(..., max_length=100)
+    executiveSummary: str = Field(..., max_length=5000)
+    rootCauseAnalysis: str = Field(..., max_length=10000)
+    timeline: list = Field(default=[], max_length=500)
+    preventionItems: list = Field(default=[], max_length=100)
 
 class SettingsUpdate(BaseModel):
-    key: str
+    key: str = Field(..., max_length=100)
     value: dict
 
 class LoginRequest(BaseModel):
-    email: str
-    password: str
+    email: EmailStr
+    password: str = Field(..., min_length=8, max_length=128)
 
 class SignupRequest(BaseModel):
-    email: str
-    password: str
-    name: str
-    company: str
-    role: str
+    email: EmailStr
+    password: str = Field(..., min_length=8, max_length=128)
+    name: str = Field(..., max_length=150)
+    company: str = Field(..., max_length=150)
+    role: str = Field(..., max_length=50)
 
 # ─── Endpoints ───
 
 @app.get("/health")
-def health_check():
+@limiter.limit("10/minute")
+def health_check(request: Request):
     return {"status": "ok", "state": simulation.state}
 
-@app.post("/api/demo/trigger")
-async def trigger_demo():
+@router.post("/demo/trigger")
+@limiter.limit("5/minute")
+async def trigger_demo(request: Request):
     success = await simulation.trigger_demo()
     if not success:
         raise HTTPException(status_code=400, detail="Cannot trigger demo. System not in HEALTHY state.")
     return {"status": "Demo triggered"}
 
-@app.post("/api/demo/remediate")
-async def apply_remediation():
+@router.post("/demo/remediate")
+@limiter.limit("5/minute")
+async def apply_remediation(request: Request):
     success = await simulation.apply_remediation()
     if not success:
         raise HTTPException(status_code=400, detail="Cannot apply remediation at this state.")
     return {"status": "Remediation started"}
 
-@app.get("/api/incidents")
-def get_incidents(db: Session = Depends(get_db)):
+@router.get("/incidents")
+@limiter.limit("60/minute")
+def get_incidents(request: Request, db: Session = Depends(get_db)):
     incidents = db.query(Incident).order_by(Incident.id.desc()).all()
     res = []
     for inc in incidents:
@@ -120,8 +189,9 @@ def get_incidents(db: Session = Depends(get_db)):
         })
     return res
 
-@app.get("/api/incidents/{incident_id}")
-def get_incident(incident_id: str, db: Session = Depends(get_db)):
+@router.get("/incidents/{incident_id}")
+@limiter.limit("60/minute")
+def get_incident(request: Request, incident_id: str, db: Session = Depends(get_db)):
     try:
         clean_id = int(incident_id.replace("INC-", ""))
     except ValueError:
@@ -167,8 +237,9 @@ def get_incident(incident_id: str, db: Session = Depends(get_db)):
         "postmortemGenerated": db.query(Postmortem).filter(Postmortem.incident_id == inc.id).count() > 0
     }
 
-@app.get("/api/postmortems")
-def get_postmortems(db: Session = Depends(get_db)):
+@router.get("/postmortems")
+@limiter.limit("60/minute")
+def get_postmortems(request: Request, db: Session = Depends(get_db)):
     postmortems = db.query(Postmortem).all()
     res = []
     for pm in postmortems:
@@ -190,8 +261,9 @@ def get_postmortems(db: Session = Depends(get_db)):
         })
     return res
 
-@app.post("/api/postmortems")
-def create_postmortem(pm_data: PostmortemCreate, db: Session = Depends(get_db)):
+@router.post("/postmortems")
+@limiter.limit("10/minute")
+def create_postmortem(request: Request, pm_data: PostmortemCreate, db: Session = Depends(get_db)):
     try:
         clean_inc_id = int(pm_data.incidentId.replace("INC-", ""))
     except ValueError:
@@ -219,8 +291,9 @@ def create_postmortem(pm_data: PostmortemCreate, db: Session = Depends(get_db)):
     db.refresh(new_pm)
     return {"status": "created", "id": new_pm.id}
 
-@app.get("/api/memory")
-def get_memory(db: Session = Depends(get_db)):
+@router.get("/memory")
+@limiter.limit("60/minute")
+def get_memory(request: Request, db: Session = Depends(get_db)):
     patterns = db.query(OperationalMemory).all()
     res = []
     for pat in patterns:
@@ -236,52 +309,63 @@ def get_memory(db: Session = Depends(get_db)):
         })
     return res
 
-@app.get("/api/settings")
-def get_settings(db: Session = Depends(get_db)):
+@router.get("/settings")
+@limiter.limit("60/minute")
+def get_settings(request: Request, db: Session = Depends(get_db)):
     settings = db.query(SystemSettings).all()
     res = {}
     for s in settings:
         res[s.key] = s.value
     return res
 
-@app.post("/api/settings")
-def update_settings(data: SettingsUpdate, db: Session = Depends(get_db)):
-    s = db.query(SystemSettings).filter(SystemSettings.key == data.key).first()
+@router.post("/settings")
+@limiter.limit("10/minute")
+def update_settings(request: Request, req: SettingsUpdate, db: Session = Depends(get_db)):
+    s = db.query(SystemSettings).filter(SystemSettings.key == req.key).first()
     if s:
-        s.value = data.value
+        s.value = req.value
     else:
-        s = SystemSettings(key=data.key, value=data.value)
+        s = SystemSettings(key=req.key, value=req.value)
         db.add(s)
     db.commit()
     return {"status": "success"}
 
-@app.post("/api/auth/login")
-def auth_login(req: LoginRequest):
-    return {
-        "status": "success",
-        "token": "mock-jwt-token-xyz-123",
-        "user": {
-            "email": req.email,
-            "name": "Karan Sharma",
-            "role": "SRE Lead"
-        }
-    }
+@auth_router.post("/login")
+@limiter.limit("5/minute")
+def login(request: Request, req: LoginRequest, db: Session = Depends(get_db)):
+    if req.email == "admin@rootrecall.com" and req.password == "securepassword123":
+        token = create_access_token({"sub": req.email})
+        return {"access_token": token, "token_type": "bearer", "user": {"email": req.email, "name": "Admin"}}
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
-@app.post("/api/auth/signup")
-def auth_signup(req: SignupRequest):
-    return {
-        "status": "success",
-        "token": "mock-jwt-token-new-user",
-        "user": {
-            "email": req.email,
-            "name": req.name,
-            "company": req.company,
-            "role": req.role
-        }
-    }
+@auth_router.post("/signup")
+@limiter.limit("5/minute")
+def signup(request: Request, req: SignupRequest):
+    token = create_access_token({"sub": req.email})
+    return {"access_token": token, "token_type": "bearer", "user": {"email": req.email, "name": req.name}}
+
+app.include_router(auth_router)
+app.include_router(router)
 
 @app.websocket("/ws/telemetry")
 async def websocket_endpoint(websocket: WebSocket):
+    origin = websocket.headers.get("origin")
+    if origin and "localhost" not in origin and "rootrecall" not in origin:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+        
+    token = websocket.query_params.get("token")
+    if not token:
+        # In a strict production env, close here. For demo, we might allow it.
+        # But per Phase 9 rules, we enforce auth.
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+    try:
+        jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    except JWTError:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+
     await websocket.accept()
     queue = asyncio.Queue()
     simulation.subscribe(queue)
@@ -291,4 +375,4 @@ async def websocket_endpoint(websocket: WebSocket):
             await websocket.send_text(json.dumps(event))
     except WebSocketDisconnect:
         simulation.unsubscribe(queue)
-        print("Client disconnected from telemetry stream")
+        logger.info("Client disconnected from telemetry stream")

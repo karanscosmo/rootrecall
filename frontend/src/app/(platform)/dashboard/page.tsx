@@ -111,9 +111,9 @@ const CHART_TABS: { id: ChartTab; label: string; key: keyof Metric; unit: string
   { id: 'errors',  label: 'Error Rate',  key: 'errorRate',  unit: '%' },
 ];
 
-export default function DashboardPage() {
+  export default function DashboardPage() {
   const router = useRouter();
-  const { incidents, aiMemories, metrics, viewMode, setViewMode } = useStore();
+  const { incidents, aiMemories, metrics, viewMode, setViewMode, startLiveEngine, stopLiveEngine } = useStore();
 
   const [chartTab, setChartTab] = useState<ChartTab>('latency');
   const [now, setNow] = useState(() => new Date());
@@ -124,8 +124,11 @@ export default function DashboardPage() {
     return () => clearInterval(id);
   }, []);
 
-  // Wait for WebSocket to pump metrics from backend
-  // We no longer simulate locally using updateMetrics
+  // Start live engine on mount
+  useEffect(() => {
+    startLiveEngine();
+    return () => stopLiveEngine();
+  }, [startLiveEngine, stopLiveEngine]);
 
   // ── Derived stats ────────────────────────────────────────────────────────
   const activeIncidents = incidents.filter((i) => i.status === 'active' || i.status === 'investigating');

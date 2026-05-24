@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
+import DOMPurify from "dompurify";
 import Logo from "@/components/ui/Logo";
 import { useCommandPalette, useCommandActions } from "@/hooks/useCommandPalette";
 import { cn } from "@/lib/utils";
@@ -185,7 +186,7 @@ export default function CommandPalette() {
                     </span>
                     <span 
                       className="font-mono text-[12px] flex-1 truncate"
-                      dangerouslySetInnerHTML={{ __html: item.highlightedLabel }}
+                      dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(item.highlightedLabel) }}
                     />
                     {("badge" in item) && (item as any).badge && (
                       <span className="font-mono text-[10px] text-rr-error bg-rr-error/10 border border-rr-error/20 px-1.5 py-0.5 rounded">

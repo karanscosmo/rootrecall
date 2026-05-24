@@ -8,9 +8,6 @@ import { useRouter } from "next/navigation";
 import { notFound } from "next/navigation";
 import { useStore } from "@/store";
 import {
-  INCIDENTS,
-  DEPLOYMENTS,
-  AI_MEMORIES,
   formatDuration,
   formatTimestamp,
   type Incident,
@@ -226,6 +223,9 @@ export default function IncidentDetailPage({ params }: PageProps) {
 
   const router = useRouter();
   const incidents = useStore((s) => s.incidents);
+  const metrics = useStore((s) => s.metrics);
+  const deployments = useStore((s) => s.deployments);
+  const aiMemories = useStore((s) => s.aiMemories);
   const resolveIncident = useStore((s) => s.resolveIncident);
   const setActiveReplay = useStore((s) => s.setActiveReplay);
 
@@ -242,7 +242,7 @@ export default function IncidentDetailPage({ params }: PageProps) {
       const apiBase = typeof window !== 'undefined'
         ? (process.env.NEXT_PUBLIC_API_URL || `http://${window.location.hostname}:8000`)
         : 'http://localhost:8000';
-      await fetch(`${apiBase}/api/demo/remediate`, { method: "POST" });
+      await fetch(`${apiBase}/demo/remediate`, { method: "POST" });
     } catch (e) {
       console.error("Failed to call remediate API", e);
     }
@@ -289,10 +289,10 @@ export default function IncidentDetailPage({ params }: PageProps) {
   }
 
   const duration = formatDuration(incident.startedAt, incident.resolvedAt);
-  const relatedDeployments = DEPLOYMENTS.filter(
-    (d) => d.triggeredIncident === incident.id
+  const relatedDeployments = deployments.filter(
+    (d: any) => d.triggeredIncident === incident.id
   );
-  const relatedMemories = AI_MEMORIES.filter((m) =>
+  const relatedMemories = aiMemories.filter((m: any) =>
     m.relatedIncidents.includes(incident.id)
   );
 
@@ -450,7 +450,8 @@ export default function IncidentDetailPage({ params }: PageProps) {
               <div className="font-mono text-[9px] text-rr-muted uppercase tracking-widest mb-2.5">
                 Triggering Deploy
               </div>
-              {relatedDeployments.map((dep) => (
+              <div className="space-y-2">
+              {relatedDeployments.map((dep: { id: string, status: string, service: string, version: string, deployedBy: string }) => (
                 <div key={dep.id} className="bg-orange-500/5 border border-orange-500/20 rounded-md p-2.5">
                   <div className="flex items-center gap-1.5 mb-1">
                     <span className="font-mono text-[10px] text-orange-400 font-bold">{dep.id}</span>
@@ -466,6 +467,7 @@ export default function IncidentDetailPage({ params }: PageProps) {
                   </div>
                 </div>
               ))}
+              </div>
             </section>
           )}
 
@@ -716,23 +718,22 @@ export default function IncidentDetailPage({ params }: PageProps) {
               </div>
               {/* Simple bar visualization */}
               <div className="flex items-end gap-0.5 h-8">
-                {[12, 15, 10, 13, 14, 18, 120, 380, 620, 1200, 2800, 4100, 5200, 4900, 5100, 5000, 4800].map(
-                  (v, i) => {
-                    const maxV = 5200;
-                    const pct = (v / maxV) * 100;
-                    return (
-                      <div
-                        key={i}
-                        className="flex-1 rounded-sm"
-                        style={{
-                          height: `${pct}%`,
-                          backgroundColor: pct > 40 ? "#f97316" : "#3a3a3a",
-                          minHeight: 2,
-                        }}
-                      />
-                    );
-                  }
-                )}
+                {metrics.map((d: any, i: number) => {
+                  const maxV = 5200;
+                  const v = d.latencyP99;
+                  const pct = (v / maxV) * 100;
+                  return (
+                    <div
+                      key={i}
+                      className="flex-1 rounded-sm"
+                      style={{
+                        height: `${pct}%`,
+                        backgroundColor: pct > 40 ? "#f97316" : "#3a3a3a",
+                        minHeight: 2,
+                      }}
+                    />
+                  );
+                })}
               </div>
               <div className="font-mono text-[9px] text-rr-muted mt-1">Past 5 minutes</div>
             </div>
@@ -747,7 +748,7 @@ export default function IncidentDetailPage({ params }: PageProps) {
             </div>
             <div className="flex flex-col gap-2">
               {relatedMemories.length > 0
-                ? relatedMemories.map((mem) => (
+                ? relatedMemories.map((mem: any) => (
                     <div
                       key={mem.patternId}
                       className="bg-rr-bg border border-rr-border rounded-md p-2.5"

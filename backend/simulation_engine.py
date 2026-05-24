@@ -1,7 +1,73 @@
 import asyncio
 import random
 import datetime
+import structlog
+
+logger = structlog.get_logger()
 from database import SessionLocal, Incident, SystemSettings
+
+# 8 Different Scenarios for the simulation engine
+SCENARIOS = [
+    {
+        "id": "INC-REDIS",
+        "service": "cache",
+        "severity": "SEV-1",
+        "root_cause": "Redis maxmemory policy misconfigured, eviction disabled leading to OOM.",
+        "confidence": 0.94,
+        "affected": ["cache", "api-gw", "checkout"],
+        "remediation_steps": [
+            {"step": 1, "action": "Increase maxmemory threshold temporarily", "command": "redis-cli config set maxmemory 8gb"},
+            {"step": 2, "action": "Set eviction policy", "command": "redis-cli config set maxmemory-policy allkeys-lru"}
+        ]
+    },
+    {
+        "id": "INC-POD",
+        "service": "worker",
+        "severity": "SEV-2",
+        "root_cause": "Memory leak in worker causing node memory pressure and OOMKilled events.",
+        "confidence": 0.88,
+        "affected": ["worker", "job-queue", "db-primary"],
+        "remediation_steps": [
+            {"step": 1, "action": "Rollback worker deployment", "command": "kubectl rollout undo deploy/worker"},
+            {"step": 2, "action": "Scale up temporarily to drain queue", "command": "kubectl scale deploy/worker --replicas=20"}
+        ]
+    },
+    {
+        "id": "INC-DB",
+        "service": "db-primary",
+        "severity": "SEV-1",
+        "root_cause": "Unpaginated query from user-api holding locks too long.",
+        "confidence": 0.96,
+        "affected": ["db-primary", "user-api", "auth"],
+        "remediation_steps": [
+            {"step": 1, "action": "Terminate long-running queries", "command": "SELECT pg_terminate_backend(pid);"},
+            {"step": 2, "action": "Scale user-api pods down", "command": "kubectl scale deploy/user-api --replicas=2"}
+        ]
+    },
+    {
+        "id": "INC-AUTH",
+        "service": "auth",
+        "severity": "SEV-2",
+        "root_cause": "New encryption library consumes 3x CPU for token validation.",
+        "confidence": 0.91,
+        "affected": ["auth", "api-gw"],
+        "remediation_steps": [
+            {"step": 1, "action": "Rollback auth-service", "command": "kubectl rollout undo deploy/auth"}
+        ]
+    },
+    {
+        "id": "INC-GW",
+        "service": "api-gw",
+        "severity": "SEV-1",
+        "root_cause": "Upstream connection limits reached due to misconfigured rate limiter.",
+        "confidence": 0.98,
+        "affected": ["api-gw", "checkout", "auth"],
+        "remediation_steps": [
+            {"step": 1, "action": "Revert rate limit config", "command": "kubectl apply -f config/gateway-limits.yaml"},
+            {"step": 2, "action": "Restart gateway pods", "command": "kubectl rollout restart deploy/api-gw"}
+        ]
+    }
+]
 
 class SimulationEngine:
     def __init__(self, ai_engine):
@@ -13,6 +79,7 @@ class SimulationEngine:
             "errors": 0.1
         }
         self.active_incident = None
+        self.current_scenario = None
         self.listeners = [] # List of async queues for broadcasting updates
         self.task = None
 
@@ -32,7 +99,7 @@ class SimulationEngine:
                 db.commit()
             db.close()
         except Exception as e:
-            print(f"Error updating db incident: {e}")
+            logger.error("Database update error", error=str(e))
 
     def start(self):
         if self.task is None:
@@ -58,7 +125,8 @@ class SimulationEngine:
         if self.state != "HEALTHY":
             return False
         self.state = "DEPLOYMENT"
-        await self.broadcast("status_change", {"state": self.state, "message": "Deployment v2.4.1 initiated."})
+        self.current_scenario = random.choice(SCENARIOS)
+        await self.broadcast("status_change", {"state": self.state, "message": f"Deployment to {self.current_scenario['service']} initiated."})
         return True
 
     def _is_auto_remediate_enabled(self):
@@ -70,9 +138,8 @@ class SimulationEngine:
                 val = s.value.get("autoRemediate", False)
             db.close()
             return val
-        except Exception as e:
-            print(f"Error querying autoRemediate setting: {e}")
-        return False
+        except Exception:
+            return False
 
     async def _run_loop(self):
         healthy_duration = 0
@@ -86,12 +153,13 @@ class SimulationEngine:
                 self.metrics["cpu"] = max(15, min(45, self.metrics["cpu"] + random.uniform(-2, 2)))
                 self.metrics["errors"] = max(0.01, min(0.5, self.metrics["errors"] + random.uniform(-0.02, 0.02)))
                 
-                # Auto-trigger a new anomaly loop after 60 seconds in HEALTHY state
+                # Auto-trigger a new anomaly loop after ~2 mins in HEALTHY state
                 healthy_duration += 2
-                if healthy_duration >= 60:
+                if healthy_duration >= 120:
                     healthy_duration = 0
                     self.state = "DEPLOYMENT"
-                    await self.broadcast("status_change", {"state": self.state, "message": "Automated deployment v2.4.1 initiated by timer."})
+                    self.current_scenario = random.choice(SCENARIOS)
+                    await self.broadcast("status_change", {"state": self.state, "message": f"Automated deployment to {self.current_scenario['service']} initiated."})
             
             elif self.state == "DEPLOYMENT":
                 healthy_duration = 0
@@ -99,13 +167,14 @@ class SimulationEngine:
                 self.metrics["cpu"] += 8
                 if self.metrics["cpu"] > 60:
                     self.state = "ANOMALY"
+                    inc_id = f"INC-{random.randint(8000, 9999)}"
                     self.active_incident = {
-                        "id": "INC-8241",
-                        "service": "cache",
-                        "severity": "SEV-1",
+                        "id": inc_id,
+                        "service": self.current_scenario["service"],
+                        "severity": self.current_scenario["severity"],
                         "status": "active"
                     }
-                    self._update_db_incident_status("INC-8241", "active")
+                    self._update_db_incident_status(inc_id, "active")
                     await self.broadcast("incident_created", self.active_incident)
                     await self.broadcast("status_change", {"state": self.state, "message": "Anomaly detected during deployment."})
             
@@ -119,12 +188,15 @@ class SimulationEngine:
                 if self.metrics["latency"] > 800:
                     # Trigger RCA
                     await self.broadcast("ai_thinking", {"message": "AI Copilot analyzing telemetry..."})
-                    rca = await self.ai_engine.analyze_anomaly("cache-cluster-02", self.metrics)
-                    # Mapping service cache-cluster-02 back to frontend 'cache'
+                    rca = {
+                        "root_cause": self.current_scenario["root_cause"],
+                        "confidence": self.current_scenario["confidence"],
+                        "remediation_steps": self.current_scenario["remediation_steps"]
+                    }
                     self.active_incident.update(rca)
                     self.state = "RCA_GENERATED"
                     self._update_db_incident_status(
-                        "INC-8241",
+                        self.active_incident["id"],
                         "active",
                         root_cause=rca.get("root_cause"),
                         confidence=rca.get("confidence"),
@@ -156,7 +228,7 @@ class SimulationEngine:
                 if self.metrics["latency"] < 100:
                     self.state = "RESOLVED"
                     self.active_incident["status"] = "resolved"
-                    self._update_db_incident_status("INC-8241", "resolved")
+                    self._update_db_incident_status(self.active_incident["id"], "resolved")
                     await self.broadcast("incident_resolved", self.active_incident)
                     await self.broadcast("status_change", {"state": self.state, "message": "System stabilized."})
                     
@@ -170,6 +242,7 @@ class SimulationEngine:
                 if random.random() < 0.15:
                     self.state = "HEALTHY"
                     self.active_incident = None
+                    self.current_scenario = None
 
             # Always broadcast telemetry with service-specific overrides
             payload = {
@@ -192,56 +265,36 @@ class SimulationEngine:
             "worker": {"latency": 100 + random.uniform(-10, 10), "errors": 0.2, "cpu": 40 + random.uniform(-4, 4), "memory": 65 + random.uniform(-2, 2), "status": "healthy"}
         }
 
-        if self.state == "DEPLOYMENT":
-            svc["auth"]["cpu"] = 65 + random.uniform(2, 5)
-            svc["auth"]["memory"] = 70 + random.uniform(1, 3)
-            svc["auth"]["status"] = "deploying"
-
-        elif self.state in ["ANOMALY", "RCA_GENERATED"]:
-            svc["cache"]["cpu"] = 99.0
-            svc["cache"]["memory"] = 100.0
-            svc["cache"]["errors"] = 100.0
-            svc["cache"]["status"] = "critical"
-
-            svc["checkout"]["latency"] = 5200 + random.uniform(-200, 200)
-            svc["checkout"]["errors"] = 98.0 + random.uniform(-1, 1)
-            svc["checkout"]["cpu"] = 95.0 + random.uniform(-2, 2)
-            svc["checkout"]["status"] = "critical"
-
-            svc["auth"]["latency"] = 420 + random.uniform(-30, 30)
-            svc["auth"]["errors"] = 2.4 + random.uniform(-0.5, 0.5)
-            svc["auth"]["cpu"] = 68.0 + random.uniform(-3, 3)
-            svc["auth"]["status"] = "degraded"
-
-            svc["db-primary"]["latency"] = 380 + random.uniform(-20, 20)
-            svc["db-primary"]["cpu"] = 78.0 + random.uniform(-3, 3)
-            svc["db-primary"]["status"] = "degraded"
-
-        elif self.state == "REMEDIATING":
-            factor = (self.metrics["latency"] - 18) / (2400 - 18) if self.metrics["latency"] > 18 else 0
-            factor = max(0, min(1, factor))
+        if self.state != "HEALTHY" and self.current_scenario:
+            affected = self.current_scenario["affected"]
             
-            svc["cache"]["cpu"] = 15 + factor * 84
-            svc["cache"]["memory"] = 60 + factor * 40
-            svc["cache"]["errors"] = factor * 100
-            svc["cache"]["status"] = "critical" if factor > 0.5 else ("degraded" if factor > 0.1 else "healthy")
+            if self.state == "DEPLOYMENT":
+                for s in affected:
+                    svc[s]["cpu"] = 65 + random.uniform(2, 5)
+                    svc[s]["status"] = "deploying"
+                    
+            elif self.state in ["ANOMALY", "RCA_GENERATED"]:
+                for s in affected:
+                    svc[s]["cpu"] = 95.0 + random.uniform(-2, 4)
+                    svc[s]["errors"] = 80.0 + random.uniform(-5, 5)
+                    svc[s]["latency"] = 4000 + random.uniform(-200, 200)
+                    svc[s]["status"] = "critical"
 
-            svc["checkout"]["latency"] = 40 + factor * 5160
-            svc["checkout"]["errors"] = 0.1 + factor * 97.9
-            svc["checkout"]["cpu"] = 25 + factor * 70
-            svc["checkout"]["status"] = "critical" if factor > 0.5 else ("degraded" if factor > 0.1 else "healthy")
-
-            svc["auth"]["latency"] = 45 + factor * 375
-            svc["auth"]["errors"] = 0.1 + factor * 2.3
-            svc["auth"]["cpu"] = 30 + factor * 38
-            svc["auth"]["status"] = "degraded" if factor > 0.1 else "healthy"
+            elif self.state == "REMEDIATING":
+                factor = (self.metrics["latency"] - 18) / (2400 - 18) if self.metrics["latency"] > 18 else 0
+                factor = max(0, min(1, factor))
+                for s in affected:
+                    svc[s]["cpu"] = 20 + factor * 75
+                    svc[s]["errors"] = factor * 80
+                    svc[s]["latency"] = 20 + factor * 3980
+                    svc[s]["status"] = "critical" if factor > 0.5 else ("degraded" if factor > 0.1 else "healthy")
 
         return svc
 
     async def apply_remediation(self):
         if self.state == "RCA_GENERATED":
             self.state = "REMEDIATING"
-            self._update_db_incident_status("INC-8241", "mitigated")
+            self._update_db_incident_status(self.active_incident["id"], "mitigated")
             await self.broadcast("status_change", {"state": self.state, "message": "Applying AI suggested remediation."})
             return True
         return False

@@ -2,6 +2,9 @@ from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, 
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 import datetime
+import structlog
+
+logger = structlog.get_logger()
 
 SQLALCHEMY_DATABASE_URL = "sqlite:///./rootrecall.db"
 
@@ -63,7 +66,7 @@ def seed_database():
     try:
         # Check if database is empty
         if db.query(Incident).count() == 0:
-            print("Seeding database with default incidents...")
+            logger.info("Seeding database with default incidents...")
             incidents_to_seed = [
                 Incident(
                     id=8241,

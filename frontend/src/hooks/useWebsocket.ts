@@ -22,6 +22,7 @@ const WS_URL = getWsUrl();
 
 export function useWebsocket() {
   const ws = useRef<WebSocket | null>(null);
+  const user = useStore((state) => state.user);
   const addLog = useStore((state) => state.addLog);
   const updateMetricsFromBackend = useStore((state) => state.updateMetricsFromBackend);
   const handleIncidentCreated = useStore((state) => state.handleIncidentCreated);
@@ -36,8 +37,12 @@ export function useWebsocket() {
     fetchIncidents();
     fetchMemory();
 
-    ws.current = new WebSocket(WS_URL);
-
+    if (user && (user as any).accessToken) {
+      ws.current = new WebSocket(`${WS_URL}?token=${(user as any).accessToken}`);
+    } else {
+      // Still connect, but backend will close if unauthorized.
+      ws.current = new WebSocket(WS_URL);
+    }
     ws.current.onopen = () => {
       console.log('Connected to RootRecall Telemetry Stream');
     };
@@ -63,6 +68,7 @@ export function useWebsocket() {
           case 'status_change':
             setBackendState(data.data.state);
             addLog({
+              id: `log-${Date.now()}-${Math.random()}`,
               timestamp: new Date(data.timestamp),
               service: "system",
               level: "INFO",
@@ -89,6 +95,7 @@ export function useWebsocket() {
           case 'ai_thinking':
             useStore.getState().setDemoPhase("ai_detecting");
             addLog({
+              id: `log-${Date.now()}-${Math.random()}`,
               timestamp: new Date(data.timestamp),
               service: "ai-copilot",
               level: "INFO",

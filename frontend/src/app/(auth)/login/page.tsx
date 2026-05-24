@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
+import { signIn } from "next-auth/react";
 import Logo from "@/components/ui/Logo";
 import AmbientVideo from "@/components/ui/AmbientVideo";
 import { cn } from "@/lib/utils";
@@ -10,11 +11,30 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
+  const [error, setError] = useState("");
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 1200));
-    window.location.href = "/dashboard";
+    setError("");
+    
+    try {
+      const res = await signIn("credentials", {
+        email,
+        password,
+        redirect: false,
+      });
+      
+      if (res?.error) {
+        setError("Invalid credentials");
+      } else if (res?.ok) {
+        window.location.href = "/dashboard";
+      }
+    } catch (err) {
+      setError("An unexpected error occurred");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -152,6 +172,12 @@ export default function LoginPage() {
                 />
               </div>
             </div>
+
+            {error && (
+              <div className="font-mono text-[11px] text-rr-error bg-rr-error/10 border border-rr-error/20 p-2 rounded">
+                {error}
+              </div>
+            )}
 
             <button
               type="submit"

@@ -1,10 +1,10 @@
 "use client";
 import { useStore } from "@/store";
-import { SERVICES } from "@/lib/telemetry";
 import { cn } from "@/lib/utils";
 
 export default function HealthPage() {
   const metrics = useStore((s) => s.metrics);
+  const services = useStore((s) => s.services);
   const lastMetric = metrics[metrics.length - 1] ?? { cpuUsage: 45, memoryUsage: 62, errorRate: 0.3, latencyP99: 82, requestRate: 4200 };
 
   const healthScore = Math.max(0, 100 - (lastMetric.errorRate * 2) - (lastMetric.cpuUsage > 80 ? 20 : 0));
@@ -46,7 +46,7 @@ export default function HealthPage() {
             {healthScore > 80 ? "Systems Operational" : healthScore > 50 ? "Degraded Performance" : "Critical Issues Detected"}
           </div>
           <div className="font-mono text-[12px] text-rr-muted mb-3">
-            {SERVICES.filter((s) => s.status === "critical").length} critical · {SERVICES.filter((s) => s.status === "degraded").length} degraded · {SERVICES.filter((s) => s.status === "healthy").length} healthy
+            {services.filter((s: any) => s.status === "critical").length} critical · {services.filter((s: any) => s.status === "degraded").length} degraded · {services.filter((s: any) => s.status === "healthy").length} healthy
           </div>
           <div className="flex gap-6">
             {[
@@ -68,7 +68,7 @@ export default function HealthPage() {
       <div>
         <div className="font-mono text-[11px] text-rr-muted uppercase tracking-widest mb-3">Service Status</div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {SERVICES.map((svc) => (
+          {services.map((svc: any) => (
             <div
               key={svc.id}
               className={cn(

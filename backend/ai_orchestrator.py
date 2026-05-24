@@ -1,12 +1,27 @@
 import random
 import asyncio
+import re
 
 class AIOrchestrator:
     def __init__(self):
-        pass
+        self.MAX_INPUT_TOKENS = 4000
+        self.MAX_OUTPUT_TOKENS = 1000
+
+    def sanitize_input(self, text: str) -> str:
+        if not isinstance(text, str):
+            text = str(text)
+        # Prevent prompt injection and script injection
+        sanitized = re.sub(r'[<>{}\[\]\\]', '', text)
+        return sanitized[:self.MAX_INPUT_TOKENS]
+
+    def enforce_output_limit(self, text: str) -> str:
+        return text[:self.MAX_OUTPUT_TOKENS]
         
-    async def analyze_anomaly(self, service, metrics):
+    async def analyze_anomaly(self, service: str, metrics: dict):
         """Simulate an AI analyzing an anomaly and returning an RCA."""
+        # Security: sanitize service name
+        safe_service = self.sanitize_input(service)
+        
         await asyncio.sleep(2)  # Simulate AI thinking time
         
         confidence = round(random.uniform(0.85, 0.98), 2)
@@ -38,12 +53,15 @@ class AIOrchestrator:
             }
         }
         
-        scenario = rca_scenarios.get(service)
+        scenario = rca_scenarios.get(safe_service)
         if not scenario:
              scenario = rca_scenarios["cache-cluster-02"]
              
+        # Security: enforce limits
+        scenario["details"] = self.enforce_output_limit(scenario["details"])
+             
         return {
-            "root_cause": scenario["root_cause"],
+            "root_cause": self.enforce_output_limit(scenario["root_cause"]),
             "details": scenario["details"],
             "confidence": confidence,
             "remediation_steps": scenario["remediation"]
@@ -51,11 +69,11 @@ class AIOrchestrator:
 
     def fingerprint_incident(self, root_cause, service):
         """Simulate matching an incident against historical memory."""
-        # Dummy memory
+        safe_cause = self.sanitize_input(root_cause)
         return {
             "similarity": round(random.uniform(0.70, 0.95), 2),
             "historical_incident_id": f"INC-{random.randint(1000, 9999)}",
-            "message": f"Similar to previous {root_cause} incident."
+            "message": self.enforce_output_limit(f"Similar to previous {safe_cause} incident.")
         }
         
 ai_engine = AIOrchestrator()

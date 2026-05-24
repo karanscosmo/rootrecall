@@ -7,7 +7,6 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useStore } from "@/store";
 import {
-  INCIDENTS,
   formatDuration,
   formatTimestamp,
   type Incident,

@@ -53,11 +53,7 @@ interface TopologyEdge {
 
 // ─── Static scenario data ─────────────────────────────────────────────────────
 
-const INCIDENTS_LIST = [
-  { id: "INC-8241", label: "INC-8241: Payment Gateway Timeout" },
-  { id: "INC-8239", label: "INC-8239: Auth Service Latency Spike" },
-  { id: "INC-8201", label: "INC-8201: Elevated 5xx Error Rate" },
-];
+// We now use incidents from the store
 
 const TIMELINE_EVENTS: TimelineEvent[] = [
   {
@@ -477,7 +473,8 @@ export default function ReplayPage() {
   const [speed, setSpeed] = useState<PlaySpeed>(1);
   const [playheadPct, setPlayheadPct] = useState(45);
   const [narrationOn, setNarrationOn] = useState(true);
-  const [selectedIncident, setSelectedIncident] = useState(INCIDENTS_LIST[0]);
+  const resolvedIncidents = incidents.filter(i => i.status === "resolved");
+  const [selectedIncident, setSelectedIncident] = useState(resolvedIncidents[0] || incidents[0]);
 
   // Synchronized narrative and active states mapping
   const currentEventIdx = TIMELINE_EVENTS.reduce((acc, ev, idx) => {
@@ -689,14 +686,14 @@ export default function ReplayPage() {
           <select
             value={selectedIncident.id}
             onChange={(e) => {
-              const found = INCIDENTS_LIST.find((i) => i.id === e.target.value);
+              const found = incidents.find((i) => i.id === e.target.value);
               if (found) setSelectedIncident(found);
             }}
             className="bg-rr-surface border border-rr-border text-rr-text text-xs px-2 py-1 rounded-md focus:outline-none focus:ring-1 focus:ring-rr-green"
           >
-            {INCIDENTS_LIST.map((inc) => (
+            {incidents.map((inc) => (
               <option key={inc.id} value={inc.id}>
-                {inc.label}
+                {inc.id}: {inc.title}
               </option>
             ))}
           </select>

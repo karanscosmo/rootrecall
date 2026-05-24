@@ -7,13 +7,13 @@ import { useStore } from "@/store";
  * Drop this hook into the root layout — it runs globally.
  */
 export function useLiveTelemetry(enabled = true) {
-  const updateMetrics = useStore((s) => s.updateMetrics);
+  const tickMetrics = useStore((s) => s.tickMetrics);
   const addLog       = useStore((s) => s.addLog);
 
   useEffect(() => {
     if (!enabled) return;
     const interval = setInterval(() => {
-      updateMetrics();
+      tickMetrics();
 
       // Occasionally inject a live log
       if (Math.random() < 0.3) {
@@ -25,9 +25,9 @@ export function useLiveTelemetry(enabled = true) {
           { level: "WARN"  as const, service: "worker-pool",   message: "WARN job queue depth: 4821 — exceeds alert threshold" },
         ];
         const log = sampleLogs[Math.floor(Math.random() * sampleLogs.length)];
-        addLog({ ...log, timestamp: new Date() });
+        addLog({ ...log, id: `log-${Date.now()}-${Math.random()}`, timestamp: new Date() });
       }
     }, 3000);
     return () => clearInterval(interval);
-  }, [enabled, updateMetrics, addLog]);
+  }, [enabled, tickMetrics, addLog]);
 }
