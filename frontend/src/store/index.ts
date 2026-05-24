@@ -1,18 +1,10 @@
 "use client";
 // ─────────────────────────────────────────────────────────────────────────────
-// RootRecall · Global Zustand Store (Live Engine)
+// RootRecall · Global Zustand Store (Enterprise Cache)
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { create } from "zustand";
 import {
-  BASE_SERVICES,
-  generateInitialIncidents,
-  generateInitialLogs,
-  generateMetricHistory,
-  generateInitialDeployments,
-  generateAIMemories,
-  generateLiveIncident,
-  generateLogEntry,
   type Incident,
   type ServiceNode,
   type AIMemory,
@@ -23,20 +15,19 @@ import {
   type ServiceStatus,
 } from "@/lib/telemetry";
 
-// Demo scenario phases (Kept for compatibility, but moving to live simulation)
-export type DemoPhase =
-  | "idle"
-  | "healthy"
-  | "deploying"
-  | "anomaly"
-  | "ai_detecting"
-  | "replay"
-  | "rca"
-  | "postmortem"
-  | "prevention";
+const BASE_SERVICES: ServiceNode[] = [
+  { id: "api-gateway", name: "API Gateway", type: "gateway", status: "healthy", latency: 15, errorRate: 0.1, cpu: 20, memory: 40, requests: 4200, x: 50, y: 10 },
+  { id: "auth-service", name: "Auth Service", type: "service", status: "healthy", latency: 45, errorRate: 0.2, cpu: 30, memory: 50, requests: 1100, x: 20, y: 40 },
+  { id: "checkout-api", name: "Checkout API", type: "service", status: "healthy", latency: 80, errorRate: 0.1, cpu: 35, memory: 60, requests: 890, x: 50, y: 40 },
+  { id: "user-profile", name: "User Profile API", type: "service", status: "healthy", latency: 50, errorRate: 0.1, cpu: 25, memory: 45, requests: 2300, x: 80, y: 40 },
+  { id: "cache-cluster", name: "Redis Cache", type: "cache", status: "healthy", latency: 2, errorRate: 0.0, cpu: 15, memory: 60, requests: 12000, x: 35, y: 70 },
+  { id: "db-primary", name: "PostgreSQL Primary", type: "database", status: "healthy", latency: 30, errorRate: 0.0, cpu: 40, memory: 75, requests: 620, x: 65, y: 70 },
+  { id: "worker-pool", name: "Worker Pool", type: "service", status: "healthy", latency: 120, errorRate: 0.5, cpu: 45, memory: 55, requests: 400, x: 50, y: 90 },
+  { id: "job-queue", name: "Job Queue", type: "queue", status: "healthy", latency: 5, errorRate: 0.0, cpu: 10, memory: 30, requests: 1500, x: 80, y: 90 },
+];
 
 interface RootRecallStore {
-  // Core data
+  // Core data (Empty until backend fetches)
   incidents: Incident[];
   services: ServiceNode[];
   aiMemories: AIMemory[];
@@ -48,19 +39,9 @@ interface RootRecallStore {
   // UI state
   selectedIncidentId: string | null;
   commandPaletteOpen: boolean;
-  demoPhase: DemoPhase;
-  demoRunning: boolean;
   sidebarCollapsed: boolean;
   activeReplayId: string | null;
   viewMode: "tech" | "exec";
-
-  // Live simulation engine
-  liveEngineRunning: boolean;
-  startLiveEngine: () => void;
-  stopLiveEngine: () => void;
-  tickMetrics: () => void;
-  tickLogs: () => void;
-  tickNotifications: () => void;
 
   // Actions
   selectIncident: (id: string | null) => void;
@@ -68,9 +49,6 @@ interface RootRecallStore {
   openCommandPalette: () => void;
   closeCommandPalette: () => void;
   toggleSidebar: () => void;
-  setDemoPhase: (phase: DemoPhase) => void;
-  startDemo: () => void;
-  stopDemo: () => void;
   setActiveReplay: (id: string | null) => void;
   addLog: (log: LogEntry) => void;
   addNotification: (notification: Omit<LiveNotification, 'id' | 'timestamp'>) => void;
@@ -96,123 +74,27 @@ interface RootRecallStore {
   logout: () => Promise<void>;
 }
 
-let metricsTimer: NodeJS.Timeout | null = null;
-let logsTimer: NodeJS.Timeout | null = null;
-let notificationsTimer: NodeJS.Timeout | null = null;
-
 export const useStore = create<RootRecallStore>((set, get) => ({
-  // Initialize with dynamic generators instead of static constants
-  incidents:    generateInitialIncidents(),
+  incidents:    [],
   services:     BASE_SERVICES,
-  aiMemories:   generateAIMemories(),
-  deployments:  generateInitialDeployments(),
-  metrics:      generateMetricHistory(20, true), // start with an incident active conceptually
-  logs:         generateInitialLogs(50),
+  aiMemories:   [],
+  deployments:  [],
+  metrics:      [],
+  logs:         [],
   notifications: [],
 
   selectedIncidentId: null,
   commandPaletteOpen: false,
-  demoPhase: "idle",
-  demoRunning: false,
   sidebarCollapsed: false,
   activeReplayId: null,
   viewMode: "tech",
-  liveEngineRunning: false,
   backendState: "HEALTHY",
-
-  startLiveEngine: () => {
-    const s = get();
-    if (s.liveEngineRunning) return;
-    set({ liveEngineRunning: true });
-
-    metricsTimer = setInterval(() => get().tickMetrics(), 2000);
-    logsTimer = setInterval(() => get().tickLogs(), 5000);
-    notificationsTimer = setInterval(() => get().tickNotifications(), 30000);
-  },
-
-  stopLiveEngine: () => {
-    set({ liveEngineRunning: false });
-    if (metricsTimer) clearInterval(metricsTimer);
-    if (logsTimer) clearInterval(logsTimer);
-    if (notificationsTimer) clearInterval(notificationsTimer);
-  },
-
-  tickMetrics: () => {
-    set((s) => {
-      const last = s.metrics[s.metrics.length - 1];
-      const activeIncidents = s.incidents.filter(i => i.status === "active");
-      const isIncident = activeIncidents.length > 0;
-      
-      const newMetric: Metric = {
-        timestamp: Date.now(),
-        latencyP99:   isIncident ? Math.min(6000, last.latencyP99 + (Math.random() - 0.3) * 400) : Math.max(40, last.latencyP99 + (Math.random() - 0.5) * 20),
-        errorRate:    isIncident ? Math.min(100, last.errorRate + (Math.random() - 0.2) * 8) : Math.max(0, last.errorRate + (Math.random() - 0.6) * 0.5),
-        cpuUsage:     isIncident ? Math.min(100, last.cpuUsage + (Math.random() - 0.3) * 5) : Math.max(15, last.cpuUsage + (Math.random() - 0.5) * 3),
-        memoryUsage:  isIncident ? Math.min(100, last.memoryUsage + (Math.random() - 0.2) * 3) : Math.max(40, last.memoryUsage + (Math.random() - 0.5) * 2),
-        requestRate:  isIncident ? Math.max(500, last.requestRate - Math.random() * 200) : Math.max(3000, last.requestRate + (Math.random() - 0.5) * 100),
-      };
-
-      // Also gently fluctuate services
-      const updatedServices = s.services.map(svc => {
-        const isAffected = activeIncidents.some(inc => inc.affectedServices.includes(svc.id));
-        return {
-          ...svc,
-          latency: isAffected ? Math.min(5000, svc.latency + (Math.random() * 100)) : Math.max(5, svc.latency + (Math.random() - 0.5) * 10),
-          cpu: isAffected ? Math.min(100, svc.cpu + (Math.random() * 5)) : Math.max(10, svc.cpu + (Math.random() - 0.5) * 2),
-          status: isAffected ? "critical" : "healthy"
-        } as ServiceNode;
-      });
-
-      return { 
-        metrics: [...s.metrics.slice(-19), newMetric],
-        services: updatedServices
-      };
-    });
-  },
-
-  tickLogs: () => {
-    set((s) => ({ logs: [generateLogEntry(), ...s.logs].slice(0, 50) }));
-  },
-
-  tickNotifications: () => {
-    const s = get();
-    const activeIncident = s.incidents.find(i => i.status === "active");
-    
-    if (activeIncident) {
-      if (Math.random() > 0.5) {
-        s.addNotification({
-          type: "error",
-          message: `${activeIncident.service} P99 latency exceeded critical threshold`,
-          incidentId: activeIncident.id
-        });
-      }
-    } else {
-      if (Math.random() > 0.7) {
-        s.addNotification({
-          type: "info",
-          message: `Background health check passed for all ${s.services.length} services`
-        });
-      }
-    }
-    
-    // Simulate new incident randomly
-    if (Math.random() > 0.95 && !activeIncident) {
-      const newInc = generateLiveIncident("active", 0);
-      set((st) => ({ incidents: [newInc, ...st.incidents] }));
-      s.addNotification({
-        type: "error",
-        message: `New anomaly detected: ${newInc.title}`,
-        incidentId: newInc.id
-      });
-    }
-  },
 
   selectIncident: (id) => set({ selectedIncidentId: id }),
   toggleCommandPalette: () => set((s) => ({ commandPaletteOpen: !s.commandPaletteOpen })),
   openCommandPalette:  () => set({ commandPaletteOpen: true }),
   closeCommandPalette: () => set({ commandPaletteOpen: false }),
   toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
-  setDemoPhase: (phase) => set({ demoPhase: phase }),
   setActiveReplay: (id) => set({ activeReplayId: id }),
   setViewMode: (mode) => set({ viewMode: mode }),
 
@@ -288,8 +170,6 @@ export const useStore = create<RootRecallStore>((set, get) => ({
 
   handleIncidentCreated: (backendIncident) =>
     set((s) => {
-      // Create a rich incident instead of generic "Anomaly Detected"
-      // Match service to generate a somewhat relevant title
       const serviceName = backendIncident.service || "unknown";
       const newIncident: Incident = {
         id: backendIncident.id,
@@ -329,19 +209,6 @@ export const useStore = create<RootRecallStore>((set, get) => ({
         inc.id === backendIncident.id ? { ...inc, status: "resolved" as const, resolvedAt: new Date() } : inc
       ),
     })),
-
-  startDemo: () => {
-    // Left for compatibility, but we prefer startLiveEngine now
-    const store = get();
-    if (store.demoRunning) return;
-    set({ demoRunning: true, demoPhase: "healthy" });
-    store.startLiveEngine();
-  },
-
-  stopDemo: () => {
-    set({ demoRunning: false, demoPhase: "idle" });
-    get().stopLiveEngine();
-  },
 
   fetchIncidents: async () => {
     try {
@@ -383,7 +250,6 @@ export const useStore = create<RootRecallStore>((set, get) => ({
     }
   },
 
-  // Auth implementation
   user: null,
   isAuthenticated: false,
   checkSession: async () => {
@@ -406,10 +272,8 @@ export const useStore = create<RootRecallStore>((set, get) => ({
     try {
       await fetch("/api/auth/signout", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-        body: "csrfToken=" // Actually we should use next-auth signOut, but we'll redirect to /api/auth/signout
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: "csrfToken="
       });
     } catch (e) {
       console.error("Logout request failed", e);

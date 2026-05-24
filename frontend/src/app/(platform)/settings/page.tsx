@@ -114,66 +114,9 @@ export default function SettingsPage() {
     mfaEnabled: false,
   });
 
-  const [apiKeys, setApiKeys] = useState<ApiKeyItem[]>([
-    { id: "1", name: "CI/CD Pipeline", prefix: "rr_live_8f92...", created: "Oct 12, 2025", used: "2 mins ago" },
-    { id: "2", name: "Grafana Plugin", prefix: "rr_live_4a1b...", created: "Nov 04, 2025", used: "1 hour ago" },
-  ]);
+  const [apiKeys, setApiKeys] = useState<ApiKeyItem[]>([]);
 
-  const [integrations, setIntegrations] = useState<IntegrationItem[]>([
-    {
-      name: "Slack",
-      key: "slack",
-      status: "connected",
-      icon: "chat",
-      description: "Receive real-time telemetry alerts, RCA cards, and postmortems directly in Slack.",
-      details: { channel: "#incidents-live" },
-    },
-    {
-      name: "PagerDuty",
-      key: "pagerduty",
-      status: "connected",
-      icon: "notifications_active",
-      description: "Trigger incidents, coordinate SRE rotas, and sync operational acknowledgment state.",
-      details: { service: "Primary SRE Pool" },
-    },
-    {
-      name: "GitHub",
-      key: "github",
-      status: "connected",
-      icon: "code",
-      description: "Link source code context and automatically open remediation Pull Requests.",
-      details: { repo: "RootRecall/core" },
-    },
-    {
-      name: "Kubernetes",
-      key: "kubernetes",
-      status: "connected",
-      icon: "layers",
-      description: "Fetch live logs, pod state, and execute self-healing container rollbacks.",
-      details: { cluster: "prod-us-east-1" },
-    },
-    {
-      name: "Datadog",
-      key: "datadog",
-      status: "disconnected",
-      icon: "monitoring",
-      description: "Import APM traces, backend logs, and custom metrics boards into the RCA engine.",
-    },
-    {
-      name: "Grafana",
-      key: "grafana",
-      status: "disconnected",
-      icon: "analytics",
-      description: "Embed live Grafana metric dashboards directly on incident details screens.",
-    },
-    {
-      name: "Discord",
-      key: "discord",
-      status: "disconnected",
-      icon: "forum",
-      description: "Pipe real-time system health reports and anomaly events to Discord webhook channels.",
-    },
-  ]);
+  const [integrations, setIntegrations] = useState<IntegrationItem[]>([]);
 
   const getApiBase = () => {
     if (typeof window !== "undefined") {
@@ -547,9 +490,7 @@ export default function SettingsPage() {
 
               <div className="divide-y divide-rr-border bg-rr-surface border border-rr-border rounded-lg overflow-hidden">
                 {[
-                  { name: "Karan Sharma", email: "karan@rootrecall.ai", role: "Owner" },
-                  { name: "Gemini AI Agent", email: "agent@rootrecall.ai", role: "Autonomous Co-pilot" },
-                  { name: "Sandbox Mock User", email: "sandbox@google-auth.mock", role: "Tester / Guest" },
+                  { name: profile.name, email: profile.email, role: "Owner" }
                 ].map((member, i) => (
                   <div key={i} className="flex justify-between items-center p-3 font-mono text-[11px]">
                     <div>

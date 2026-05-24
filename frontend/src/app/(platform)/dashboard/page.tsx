@@ -112,11 +112,23 @@ const CHART_TABS: { id: ChartTab; label: string; key: keyof Metric; unit: string
 ];
 
 function Clock() {
+  const [mounted, setMounted] = useState(false);
   const [now, setNow] = useState(() => new Date());
+  
   useEffect(() => {
+    setMounted(true);
     const id = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(id);
   }, []);
+
+  if (!mounted) {
+    return (
+      <div className="font-mono text-[11px] text-rr-muted bg-rr-surface border border-rr-border rounded px-3 py-1.5 shrink-0 opacity-0">
+        00:00:00
+      </div>
+    );
+  }
+
   return (
     <div className="font-mono text-[11px] text-rr-muted bg-rr-surface border border-rr-border rounded px-3 py-1.5 shrink-0">
       {now.toLocaleString('en-US', {
@@ -204,14 +216,7 @@ export default function DashboardPage() {
   const aiMemories = useStore((s) => s.aiMemories);
   const viewMode = useStore((s) => s.viewMode);
   const setViewMode = useStore((s) => s.setViewMode);
-  const startLiveEngine = useStore((s) => s.startLiveEngine);
-  const stopLiveEngine = useStore((s) => s.stopLiveEngine);
-
-  // Start live engine on mount
-  useEffect(() => {
-    startLiveEngine();
-    return () => stopLiveEngine();
-  }, [startLiveEngine, stopLiveEngine]);
+  // Live engine is now driven by WebSocket hook globally
 
   // ── Derived stats ────────────────────────────────────────────────────────
   const activeIncidents = incidents.filter((i) => i.status === 'active' || i.status === 'investigating');

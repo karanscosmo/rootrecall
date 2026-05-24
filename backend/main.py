@@ -1,7 +1,7 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Depends, APIRouter, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field, EmailStr
+from typing import List
 from sqlalchemy.orm import Session
 import asyncio
 import json
@@ -43,7 +43,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-secure_headers = secure.Secure()
+secure_headers = secure.Secure(
+    server=secure.Server().set("RootRecall-Enterprise-Server"),
+    csp=secure.ContentSecurityPolicy().default_src("'self'").frame_ancestors("'none'").upgrade_insecure_requests(),
+    hsts=secure.StrictTransportSecurity().include_subdomains().preload().max_age(31536000),
+    referrer=secure.ReferrerPolicy().no_referrer(),
+    cache=secure.CacheControl().no_cache().no_store().must_revalidate(),
+    xss=secure.XXSSProtection().enable_block(),
+    content_type=secure.XContentTypeOptions().nosniff(),
+)
 
 @app.middleware("http")
 async def set_secure_headers(request, call_next):
@@ -114,34 +122,7 @@ async def startup_event():
     seed_database()
     simulation.start()
 
-# ─── Schemas ───
-
-class PostmortemCreate(BaseModel):
-    incidentId: str = Field(..., max_length=100)
-    executiveSummary: str = Field(..., max_length=5000)
-    rootCauseAnalysis: str = Field(..., max_length=10000)
-    timeline: list = Field(default=[], max_length=500)
-    preventionItems: list = Field(default=[], max_length=100)
-
-class SettingsUpdate(BaseModel):
-    key: str = Field(..., max_length=100)
-    value: dict
-
-class LoginRequest(BaseModel):
-    email: EmailStr
-    password: str = Field(..., min_length=8, max_length=128)
-
-class SignupRequest(BaseModel):
-    email: EmailStr
-    password: str = Field(..., min_length=8, max_length=128)
-    name: str = Field(..., max_length=150)
-    company: str = Field(..., max_length=150)
-    role: str = Field(..., max_length=50)
-
-class GoogleLoginRequest(BaseModel):
-    email: EmailStr
-    name: str = Field(default="Google User", max_length=150)
-    secret: str
+from schemas import PostmortemCreate, SettingsUpdate, LoginRequest, SignupRequest, GoogleLoginRequest, IncidentResponse, PostmortemResponse, MemoryResponse
 
 # ─── Endpoints ───
 
@@ -166,7 +147,7 @@ async def apply_remediation(request: Request, current_user: User = Depends(get_c
         raise HTTPException(status_code=400, detail="Cannot apply remediation at this state.")
     return {"status": "Remediation started"}
 
-@router.get("/incidents")
+@router.get("/incidents", response_model=List[IncidentResponse])
 @limiter.limit("60/minute")
 def get_incidents(request: Request, db: Session = Depends(get_db)):
     incidents = db.query(Incident).order_by(Incident.id.desc()).all()
@@ -210,7 +191,7 @@ def get_incidents(request: Request, db: Session = Depends(get_db)):
         })
     return res
 
-@router.get("/incidents/{incident_id}")
+@router.get("/incidents/{incident_id}", response_model=IncidentResponse)
 @limiter.limit("60/minute")
 def get_incident(request: Request, incident_id: str, db: Session = Depends(get_db)):
     try:
@@ -258,7 +239,7 @@ def get_incident(request: Request, incident_id: str, db: Session = Depends(get_d
         "postmortemGenerated": db.query(Postmortem).filter(Postmortem.incident_id == inc.id).count() > 0
     }
 
-@router.get("/postmortems")
+@router.get("/postmortems", response_model=List[PostmortemResponse])
 @limiter.limit("60/minute")
 def get_postmortems(request: Request, db: Session = Depends(get_db)):
     postmortems = db.query(Postmortem).all()
@@ -312,7 +293,7 @@ def create_postmortem(request: Request, pm_data: PostmortemCreate, db: Session =
     db.refresh(new_pm)
     return {"status": "created", "id": new_pm.id}
 
-@router.get("/memory")
+@router.get("/memory", response_model=List[MemoryResponse])
 @limiter.limit("60/minute")
 def get_memory(request: Request, db: Session = Depends(get_db)):
     patterns = db.query(OperationalMemory).all()

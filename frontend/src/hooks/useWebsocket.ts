@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { useStore, type DemoPhase } from '@/store';
+import { useStore } from '@/store';
 
 const getWsUrl = (): string => {
   if (typeof window === 'undefined') {
@@ -75,25 +75,18 @@ export function useWebsocket() {
               message: data.data.message
             });
             
-            const stateMap: Record<string, DemoPhase> = {
-              "HEALTHY": "healthy",
-              "DEPLOYMENT": "deploying",
-              "ANOMALY": "anomaly",
-              "RCA_GENERATED": "rca",
-              "REMEDIATING": "prevention",
-              "RESOLVED": "prevention"
-            };
-            const phase = stateMap[data.data.state];
-            if (phase) {
-              useStore.getState().setDemoPhase(phase);
-              if (data.data.state !== "HEALTHY") {
-                useStore.getState().startDemo();
-              }
+            if (data.data.state === "ANOMALY") {
+              addLog({
+                id: `log-${Date.now()}-${Math.random()}`,
+                timestamp: new Date(data.timestamp),
+                service: "system",
+                level: "WARN",
+                message: "Anomaly detected in telemetry stream."
+              });
             }
             break;
 
           case 'ai_thinking':
-            useStore.getState().setDemoPhase("ai_detecting");
             addLog({
               id: `log-${Date.now()}-${Math.random()}`,
               timestamp: new Date(data.timestamp),
