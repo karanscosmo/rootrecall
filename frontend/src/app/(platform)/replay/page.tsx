@@ -475,7 +475,8 @@ export default function ReplayPage() {
   const [playheadPct, setPlayheadPct] = useState(45);
   const [narrationOn, setNarrationOn] = useState(true);
   const resolvedIncidents = incidents.filter(i => i.status === "resolved");
-  const [selectedIncident, setSelectedIncident] = useState(resolvedIncidents[0] || incidents[0]);
+  const FALLBACK_INCIDENT = { id: "INC-8241", title: "Redis Saturation Anomaly" };
+  const [selectedIncident, setSelectedIncident] = useState<any>(resolvedIncidents[0] || incidents[0] || FALLBACK_INCIDENT);
 
   // Synchronized narrative and active states mapping
   const currentEventIdx = TIMELINE_EVENTS.reduce((acc, ev, idx) => {
@@ -685,18 +686,22 @@ export default function ReplayPage() {
             Incident
           </label>
           <select
-            value={selectedIncident.id}
+            value={selectedIncident?.id || ""}
             onChange={(e) => {
               const found = incidents.find((i) => i.id === e.target.value);
               if (found) setSelectedIncident(found);
             }}
             className="bg-rr-surface border border-rr-border text-rr-text text-xs px-2 py-1 rounded-md focus:outline-none focus:ring-1 focus:ring-rr-green"
           >
-            {incidents.map((inc) => (
-              <option key={inc.id} value={inc.id}>
-                {inc.id}: {inc.title}
-              </option>
-            ))}
+            {incidents.length > 0 ? (
+              incidents.map((inc) => (
+                <option key={inc.id} value={inc.id}>
+                  {inc.id}: {inc.title}
+                </option>
+              ))
+            ) : (
+              <option value="INC-8241">INC-8241: Redis Saturation Anomaly</option>
+            )}
           </select>
         </div>
 
