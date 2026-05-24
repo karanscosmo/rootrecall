@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import { useStore } from "@/store";
 import { cn } from "@/lib/utils";
 import Logo from "@/components/ui/Logo";
+import { signOut } from "next-auth/react";
 
 const NAV_ITEMS = [
   { href: "/dashboard",   label: "Dashboard",       icon: "dashboard" },
@@ -134,6 +135,20 @@ export default function Sidebar() {
               )}
             </Link>
           ))}
+          <button
+            onClick={() => signOut({ callbackUrl: "/login" })}
+            title={sidebarCollapsed ? "Log Out" : undefined}
+            className={cn(
+              "flex items-center rounded-md transition-all duration-150 group border-l-2 w-full text-left",
+              sidebarCollapsed ? "justify-center px-0 py-2 h-10 w-10 mx-auto" : "gap-3 px-3 py-2 border-transparent",
+              "text-rr-muted hover:text-rr-error hover:bg-rr-error/5"
+            )}
+          >
+            <span className="material-symbols-outlined text-[18px]">logout</span>
+            {!sidebarCollapsed && (
+              <span className="font-mono text-[12px] font-medium">Log Out</span>
+            )}
+          </button>
         </div>
 
         {/* User */}
