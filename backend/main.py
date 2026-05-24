@@ -122,6 +122,11 @@ class SignupRequest(BaseModel):
     company: str = Field(..., max_length=150)
     role: str = Field(..., max_length=50)
 
+class GoogleLoginRequest(BaseModel):
+    email: EmailStr
+    name: str = Field(default="Google User", max_length=150)
+    secret: str
+
 # ─── Endpoints ───
 
 @app.get("/health")
@@ -337,6 +342,14 @@ def login(request: Request, req: LoginRequest, db: Session = Depends(get_db)):
         token = create_access_token({"sub": req.email})
         return {"access_token": token, "token_type": "bearer", "user": {"email": req.email, "name": "Admin"}}
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+
+@auth_router.post("/google")
+@limiter.limit("10/minute")
+def google_login(request: Request, req: GoogleLoginRequest):
+    if req.secret != SECRET_KEY:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid internal secret")
+    token = create_access_token({"sub": req.email})
+    return {"access_token": token, "token_type": "bearer", "user": {"email": req.email, "name": req.name}}
 
 @auth_router.post("/signup")
 @limiter.limit("5/minute")

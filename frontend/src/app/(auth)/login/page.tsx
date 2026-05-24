@@ -119,7 +119,7 @@ export default function LoginPage() {
           {/* SSO */}
           <button 
             type="button"
-            onClick={() => window.location.href = "/api/auth/login/google"}
+            onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
             className="w-full flex items-center justify-center gap-3 py-2.5 bg-rr-surface border border-rr-border rounded-lg hover:border-rr-border/80 hover:bg-white/[0.03] transition-colors font-mono text-[12px] text-rr-text cursor-pointer"
           >
             <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none">
