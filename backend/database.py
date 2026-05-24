@@ -50,7 +50,7 @@ class Postmortem(Base):
     __tablename__ = "postmortems"
 
     id = Column(Integer, primary_key=True, index=True)
-    incident_id = Column(Integer)
+    incident_id = Column(Integer, index=True)
     executive_summary = Column(String)
     timeline = Column(JSON)
     root_cause_analysis = Column(String)

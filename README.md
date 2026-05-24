@@ -1,77 +1,102 @@
-# RootRecall 🚀
+# RootRecall
 
-**Enterprise AI Operations & Incident Intelligence Platform**
+**Next-Gen AI Incident Intelligence & Observability Platform**
 
-RootRecall is a centralized, AI-driven observability and operations platform designed for modern engineering teams. It transforms chaotic incidents into structured operational intelligence, allowing teams to diagnose, remediate, and learn from system failures faster than ever before.
+RootRecall translates chaotic infrastructure telemetry into structured operational intelligence. Designed for modern SRE and platform engineering teams, RootRecall correlates high-cardinality system metrics, identifies cascading failure vectors, automates root cause analyses (RCA) via Gemini, and generates production-ready postmortem reports in real-time.
 
-## 🌟 Key Features
+---
 
-- **Real-Time Telemetry Engine:** Correlates high-cardinality metrics (Latency, CPU, Error Rates) across microservice topologies to identify anomalies instantly.
-- **AI-Powered Diagnostics:** Powered by Gemini, the platform dynamically generates Root Cause Analyses (RCAs) and prescribes immediate mitigation steps (e.g., `kubectl` rollback commands) within seconds of an anomaly.
-- **Cascading Failure Simulation:** An advanced backend engine maps out microservice dependency graphs, propagating realistic degradation scenarios to pressure-test the platform's response capabilities.
-- **Executive vs. Technical Views:** Effortlessly switch between deep technical telemetry tailored for SREs and high-level risk/SLA exposure summaries designed for stakeholders.
-- **Enterprise-Grade Security:** Hardened FastAPI backend enforcing strict Pydantic schemas, CSP headers, rate-limiting, and JWT-based NextAuth authentication.
-- **Cinematic UI/UX:** Built on Next.js 14 and TailwindCSS, the interface provides a premium, lag-free experience featuring micro-animations, glassmorphism, and dynamic visual states.
+## 🌟 Platform Capabilities
 
-## 🏗️ Architecture Stack
+### 1. Centralized Telemetry Orchestration
+All metric streams are unified. Unlike traditional fragmented dashboards, a deployment anomaly automatically triggers downstream dependency analysis, maps service degradations, notifies engineering, updates incident state machines, and constructs chronological replay timelines.
 
-### Frontend
-- Next.js 14 (App Router)
-- React 18 & TypeScript
-- TailwindCSS (Utility-first styling)
-- Zustand (State Management)
-- Recharts (Real-time telemetry charting)
-- NextAuth.js (Enterprise Authentication)
+### 2. High-Fidelity Incident Replay (Story Mode)
+Reconstruct failures step-by-step. Engineers can scrub through historic timelines to view synchronized state charts, see topological flow changes in real-time, and read contextual AI narration summarizing exactly what happened and when.
 
-### Backend
-- FastAPI (High-performance API)
-- Python 3.13
-- SQLite & SQLAlchemy (Database ORM)
-- Google GenAI (Gemini for RCA generation)
-- WebSockets (Real-time metric streaming)
+### 3. Contextual SRE Copilot
+A conversational assistant that is deeply infrastructure-aware. The copilot accesses active logs, resource configurations, and database metrics to recommend precise CLI remediations (e.g. `kubectl` scaling/rollback commands) and predict incident recurrence probability.
 
-## 🚀 Quick Start (Local Development)
+### 4. Automated Postmortem Reports
+Say goodbye to blank Google Docs. RootRecall compiles SRE-grade Markdown reports detailing executive summaries, root cause analyses, incident timelines, and actionable prevention items derived directly from simulated or live incident telemetry.
 
-### Prerequisites
-- Node.js (v18+)
-- Python 3.10+
-- A Google Gemini API Key (optional but recommended for real AI generation)
+---
 
-### 1. Start the Backend
+## 🏗️ Technical Architecture
+
+### Frontend Layer
+- **Framework:** Next.js (App Router)
+- **State Management:** Zustand (reactive client cache)
+- **Charts & Topology:** Recharts & dynamic SVG layout engines
+- **Authentication:** NextAuth.js (JWT strategy with Google OAuth & Credentials fallback)
+- **Ambience:** Lazy loaded cinematic GPU-efficient backdrops
+
+### Backend & Simulation Layer
+- **API Engine:** FastAPI (Python 3.13) with SQLAlchemy ORM connection pooling
+- **Telemetry Stream:** High-throughput WebSockets with exponential backoff client reconnects
+- **AI Engine:** Google Gemini (`gemini-2.5-flash`) via the Google GenAI SDK
+- **Rate-Limiting:** SlowAPI (configured for production throttling)
+
+---
+
+## 🚀 Local Development Setup
+
+### 1. Backend Server Setup
+Navigate to the `backend/` directory, set up your virtual environment, and boot the server:
 ```bash
 cd backend
-python -m venv venv
+python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-# Set environment variables
-export GEMINI_API_KEY="your-gemini-key"
-export INTERNAL_AUTH_SECRET="supersecret-default"
-export SECRET_KEY="supersecret-default"
-# Run the API
+
+# Configure environment variables
+export DATABASE_URL="sqlite:///./rootrecall.db"
+export SECRET_KEY="your-production-secret-key"
+export ALGORITHM="HS256"
+export GEMINI_API_KEY="your-gemini-api-key"
+export INTERNAL_AUTH_SECRET="sync-secret-with-nextauth"
+
 uvicorn main:app --reload --port 8000
 ```
 
-### 2. Start the Frontend
+### 2. Frontend Next.js Setup
+Navigate to the `frontend/` directory, install packages, and boot the client dev server:
 ```bash
 cd frontend
 npm install
-# Configure NextAuth
+
+# Configure environment variables
+export NEXTAUTH_SECRET="same-production-secret-key-as-backend"
 export NEXTAUTH_URL="http://localhost:3000"
-export NEXTAUTH_SECRET="fallback-secret-for-development"
-export NEXT_PUBLIC_API_URL="http://127.0.0.1:8000"
-# Run the client
+export NEXT_PUBLIC_API_URL="http://localhost:8000/api/v1"
+export NEXT_PUBLIC_WS_URL="ws://localhost:8000/ws/telemetry"
+export INTERNAL_AUTH_SECRET="sync-secret-with-nextauth"
+
 npm run dev
 ```
+Open `http://localhost:3000` in your browser and sign in with the default credentials (`admin@rootrecall.com` / `securepassword123`) or via Google OAuth.
 
-Navigate to `http://localhost:3000` to log in and access the dashboard.
+---
 
-## 🛡️ Production Deployment
+## 🛡️ Production Deployments
 
-RootRecall is built to be deployed across standard enterprise infrastructure:
-- **Frontend:** Vercel or Netlify (Zero-config Next.js deployments).
-- **Backend:** Railway or Render (Procfile and standard `requirements.txt` included).
+RootRecall is built deploy-ready for modern cloud environments:
 
-See `render.yaml` and `railway.json` for IAC configuration.
+### Frontend (Vercel)
+The client builds cleanly using standard Next.js compilation targets.
+1. Link your repository in Vercel.
+2. Inject required environment variables (`NEXTAUTH_SECRET`, `NEXTAUTH_URL`, `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_WS_URL`, `INTERNAL_AUTH_SECRET`).
+3. Deploy.
 
-## 📄 License
-Proprietary. All rights reserved. RootRecall AI.
+### Backend (Railway / Render)
+We include configuration manifests for instant container deployment.
+- **Railway:** Uses the configured `railway.json` and `Procfile`. Link the backend folder, bind port `8000`, configure your PostgreSQL database instance, and map `DATABASE_URL`.
+- **Render:** Refer to the root `render.yaml` template to instantiate high-performance Python services.
+
+---
+
+## 🛡️ Security Policy & Hardening
+- **CSP Headers:** Embedded inside `next.config.ts` headers to enforce strict frame-ancestor rules and secure WebSocket protocols (`wss:`).
+- **XSS Protections:** HTML elements rendering markdown inputs are automatically sanitized using `DOMPurify`.
+- **SQLi Protections:** Parameterized ORM queries bind user values automatically to prevent script injection.
+- **Rate Limiting:** Core triggers and chat inputs are bounded using FastAPI endpoint limits.

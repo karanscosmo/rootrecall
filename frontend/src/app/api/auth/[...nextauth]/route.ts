@@ -17,7 +17,9 @@ export const authOptions: NextAuthOptions = {
       async authorize(credentials, req) {
         if (!credentials?.email || !credentials?.password) return null;
         try {
-          const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000'}/api/v1/auth/login`, {
+          const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api/v1';
+          const loginUrl = apiBase.endsWith('/api/v1') ? `${apiBase}/auth/login` : `${apiBase}/api/v1/auth/login`;
+          const res = await fetch(loginUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -51,7 +53,9 @@ export const authOptions: NextAuthOptions = {
         // If it's a google login, sync it with FastAPI
         if (account.provider === 'google') {
           try {
-            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000'}/api/v1/auth/google`, {
+            const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api/v1';
+            const googleUrl = apiBase.endsWith('/api/v1') ? `${apiBase}/auth/google` : `${apiBase}/api/v1/auth/google`;
+            const res = await fetch(googleUrl, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({

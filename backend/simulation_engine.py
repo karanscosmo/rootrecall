@@ -6,6 +6,44 @@ import structlog
 logger = structlog.get_logger()
 from database import SessionLocal, Incident, SystemSettings
 
+SCENARIOS = {
+    "redis_saturation": {
+        "service": "cache-cluster",
+        "message": "Redis Saturation: cache memory utilization crossed 98% threshold.",
+        "incident_title": "Redis Cache Saturation & OOM Cascade",
+        "severity": "SEV-1",
+        "impact": "100% checkout failure, ~$3.2k/min revenue loss"
+    },
+    "k8s_pod_failure": {
+        "service": "worker-pool",
+        "message": "Kubernetes node eviction on node worker-pool-3.",
+        "incident_title": "Worker Pool Degraded: Pod Eviction Failure",
+        "severity": "SEV-2",
+        "impact": "Background jobs delayed, queue latency > 15s"
+    },
+    "db_pool_exhaustion": {
+        "service": "db-primary",
+        "message": "PostgreSQL active connection pool saturation detected.",
+        "incident_title": "PostgreSQL Connection Pool Saturation Cascade",
+        "severity": "SEV-1",
+        "impact": "All user profile and auth requests timing out"
+    },
+    "api_latency": {
+        "service": "api-gateway",
+        "message": "API Gateway ingress queue congestion.",
+        "incident_title": "API Gateway Latency Spike under High Load",
+        "severity": "SEV-2",
+        "impact": "Ingress latency > 2000ms, minor packet drops"
+    },
+    "auth_instability": {
+        "service": "auth-service",
+        "message": "Upstream identity provider handshake timeout.",
+        "incident_title": "Auth Service Degradation: Upstream Handshake Failure",
+        "severity": "SEV-1",
+        "impact": "90% of user logins and token refreshes failing"
+    }
+}
+
 class SimulationEngine:
     def __init__(self, ai_engine):
         self.state = "HEALTHY" # HEALTHY -> DEPLOYMENT -> ANOMALY -> RCA_GENERATED -> REMEDIATING -> RESOLVED
@@ -16,26 +54,29 @@ class SimulationEngine:
             "errors": 0.1
         }
         self.active_incident = None
+        self.active_scenario_name = None
         
-        # Real-time service topology with independent health trackers
+        # Real-time service topology with independent health trackers matching frontend keys
         self.services = {
-            "api-gw": {"latency": 15, "errors": 0.05, "cpu": 20, "memory": 40, "status": "healthy"},
-            "auth": {"latency": 45, "errors": 0.1, "cpu": 30, "memory": 50, "status": "healthy"},
-            "checkout": {"latency": 40, "errors": 0.1, "cpu": 25, "memory": 55, "status": "healthy"},
-            "user-api": {"latency": 30, "errors": 0.1, "cpu": 20, "memory": 45, "status": "healthy"},
-            "cache": {"latency": 2, "errors": 0.0, "cpu": 15, "memory": 60, "status": "healthy"},
+            "api-gateway": {"latency": 15, "errors": 0.05, "cpu": 20, "memory": 40, "status": "healthy"},
+            "auth-service": {"latency": 45, "errors": 0.1, "cpu": 30, "memory": 50, "status": "healthy"},
+            "checkout-api": {"latency": 40, "errors": 0.1, "cpu": 25, "memory": 55, "status": "healthy"},
+            "user-profile": {"latency": 30, "errors": 0.1, "cpu": 20, "memory": 45, "status": "healthy"},
+            "cache-cluster": {"latency": 2, "errors": 0.0, "cpu": 15, "memory": 60, "status": "healthy"},
             "db-primary": {"latency": 25, "errors": 0.1, "cpu": 35, "memory": 70, "status": "healthy"},
-            "worker": {"latency": 100, "errors": 0.2, "cpu": 40, "memory": 65, "status": "healthy"}
+            "worker-pool": {"latency": 100, "errors": 0.2, "cpu": 40, "memory": 65, "status": "healthy"},
+            "job-queue": {"latency": 5, "errors": 0.0, "cpu": 10, "memory": 30, "status": "healthy"}
         }
         
         # Dependency graph for cascading failures
         self.topology_graph = {
-            "api-gw": ["auth", "checkout", "user-api"],
-            "auth": ["db-primary", "cache"],
-            "checkout": ["cache", "worker"],
-            "user-api": ["db-primary", "cache"],
-            "worker": ["db-primary", "cache"],
-            "cache": [],
+            "api-gateway": ["auth-service", "checkout-api", "user-profile"],
+            "auth-service": ["db-primary", "cache-cluster"],
+            "checkout-api": ["cache-cluster", "worker-pool"],
+            "user-profile": ["db-primary", "cache-cluster"],
+            "worker-pool": ["db-primary", "cache-cluster", "job-queue"],
+            "job-queue": ["db-primary"],
+            "cache-cluster": [],
             "db-primary": []
         }
         
@@ -43,26 +84,47 @@ class SimulationEngine:
         self.listeners = [] # List of async queues for broadcasting updates
         self.task = None
 
-    def _update_db_incident_status_sync(self, incident_id_str, status, root_cause=None, confidence=None, remediation_steps=None):
+    def _update_db_incident_status_sync(self, incident_id_str, status, title=None, service=None, severity=None, impact=None, root_cause=None, confidence=None, remediation_steps=None):
         try:
             db = SessionLocal()
             inc_id = int(incident_id_str.replace("INC-", ""))
             db_inc = db.query(Incident).filter(Incident.id == inc_id).first()
-            if db_inc:
+            if not db_inc:
+                # If generated incident during simulation, insert it
+                db_inc = Incident(
+                    id=inc_id,
+                    title=title or "Service Degradation Detected",
+                    service=service or "unknown",
+                    severity=severity or "SEV-2",
+                    status=status,
+                    impact=impact or "degraded service availability",
+                    start_time=datetime.datetime.utcnow(),
+                    is_simulated=True
+                )
+                db.add(db_inc)
+            else:
                 db_inc.status = status
+                if title:
+                    db_inc.title = title
+                if service:
+                    db_inc.service = service
+                if severity:
+                    db_inc.severity = severity
+                if impact:
+                    db_inc.impact = impact
                 if root_cause is not None:
                     db_inc.root_cause = root_cause
                 if confidence is not None:
                     db_inc.confidence = confidence
                 if remediation_steps is not None:
                     db_inc.remediation_steps = remediation_steps
-                db.commit()
+            db.commit()
             db.close()
         except Exception as e:
             logger.error("Database update error", error=str(e))
 
-    async def _update_db_incident_status(self, incident_id_str, status, root_cause=None, confidence=None, remediation_steps=None):
-        await asyncio.to_thread(self._update_db_incident_status_sync, incident_id_str, status, root_cause, confidence, remediation_steps)
+    async def _update_db_incident_status(self, incident_id_str, status, title=None, service=None, severity=None, impact=None, root_cause=None, confidence=None, remediation_steps=None):
+        await asyncio.to_thread(self._update_db_incident_status_sync, incident_id_str, status, title, service, severity, impact, root_cause, confidence, remediation_steps)
 
     def start(self):
         if self.task is None:
@@ -84,12 +146,21 @@ class SimulationEngine:
         for q in self.listeners:
             await q.put(event)
 
-    async def trigger_demo(self):
+    async def trigger_demo(self, scenario_name: str = None):
         if self.state != "HEALTHY":
             return False
+        
+        # Pick scenario
+        if scenario_name and scenario_name in SCENARIOS:
+            self.active_scenario_name = scenario_name
+        else:
+            self.active_scenario_name = random.choice(list(SCENARIOS.keys()))
+            
+        scenario = SCENARIOS[self.active_scenario_name]
         self.state = "DEPLOYMENT"
-        self.failing_service = random.choice(list(self.services.keys()))
-        await self.broadcast("status_change", {"state": self.state, "message": f"Deployment to {self.failing_service} initiated."})
+        self.failing_service = scenario["service"]
+        
+        await self.broadcast("status_change", {"state": self.state, "message": f"Deployment rollout initiated: {scenario['message']}"})
         return True
 
     def _is_auto_remediate_enabled_sync(self):
@@ -112,30 +183,109 @@ class SimulationEngine:
         self.metrics["latency"] = max(15, min(45, self.metrics["latency"] + random.uniform(-3, 3)))
         self.metrics["cpu"] = max(15, min(45, self.metrics["cpu"] + random.uniform(-2, 2)))
         self.metrics["errors"] = max(0.01, min(0.5, self.metrics["errors"] + random.uniform(-0.02, 0.02)))
-        for svc in self.services.values():
-            svc["status"] = "healthy"
+        
+        # Stabilize all services to their baselines
+        baselines = {
+            "api-gateway": {"latency": 15, "errors": 0.05, "cpu": 20, "memory": 40},
+            "auth-service": {"latency": 45, "errors": 0.1, "cpu": 30, "memory": 50},
+            "checkout-api": {"latency": 40, "errors": 0.1, "cpu": 25, "memory": 55},
+            "user-profile": {"latency": 30, "errors": 0.1, "cpu": 20, "memory": 45},
+            "cache-cluster": {"latency": 2, "errors": 0.0, "cpu": 15, "memory": 60},
+            "db-primary": {"latency": 25, "errors": 0.1, "cpu": 35, "memory": 70},
+            "worker-pool": {"latency": 100, "errors": 0.2, "cpu": 40, "memory": 65},
+            "job-queue": {"latency": 5, "errors": 0.0, "cpu": 10, "memory": 30}
+        }
+        for k, v in self.services.items():
+            base = baselines[k]
+            v["status"] = "healthy"
+            v["latency"] = max(1, int(base["latency"] + random.uniform(-2, 2)))
+            v["errors"] = max(0.0, base["errors"] + random.uniform(-0.05, 0.05))
+            v["cpu"] = max(5, int(base["cpu"] + random.uniform(-2, 2)))
+            v["memory"] = base["memory"]
 
     def _cascade_failure(self):
-        """Propagate failure up the topology graph"""
-        if not self.failing_service:
+        """Propagate failure realistically based on the active scenario"""
+        if not self.active_scenario_name:
             return
             
-        # Fail the root service
-        self.services[self.failing_service]["cpu"] = min(99, self.services[self.failing_service]["cpu"] + random.uniform(5, 10))
-        self.services[self.failing_service]["latency"] += random.uniform(100, 300)
-        self.services[self.failing_service]["errors"] += random.uniform(2.0, 5.0)
-        self.services[self.failing_service]["status"] = "critical"
+        scenario = self.active_scenario_name
         
-        # Propagate to upstream dependents
-        for upstream, dependencies in self.topology_graph.items():
-            if self.failing_service in dependencies:
-                # Upstream suffers latency/errors
-                self.services[upstream]["latency"] += random.uniform(50, 150)
-                self.services[upstream]["errors"] += random.uniform(0.5, 2.0)
-                if self.services[upstream]["latency"] > 500:
-                    self.services[upstream]["status"] = "critical"
-                elif self.services[upstream]["latency"] > 200:
-                    self.services[upstream]["status"] = "degraded"
+        if scenario == "redis_saturation":
+            # Cache cluster goes down
+            self.services["cache-cluster"]["status"] = "critical"
+            self.services["cache-cluster"]["latency"] = 1500
+            self.services["cache-cluster"]["cpu"] = 99
+            self.services["cache-cluster"]["memory"] = 100
+            self.services["cache-cluster"]["errors"] = 85.0
+            
+            # Checkout API breaks cascadingly
+            self.services["checkout-api"]["status"] = "critical"
+            self.services["checkout-api"]["latency"] = 5200
+            self.services["checkout-api"]["errors"] = 98.0
+            self.services["checkout-api"]["cpu"] = 80
+            
+            # Auth service degrades slightly because it reads/writes session cache
+            self.services["auth-service"]["status"] = "degraded"
+            self.services["auth-service"]["latency"] = 420
+            self.services["auth-service"]["errors"] = 12.0
+            
+            # API Gateway experiences ingress backup
+            self.services["api-gateway"]["status"] = "degraded"
+            self.services["api-gateway"]["latency"] = 180
+            
+        elif scenario == "k8s_pod_failure":
+            # Worker Pool is evicted/failing
+            self.services["worker-pool"]["status"] = "critical"
+            self.services["worker-pool"]["cpu"] = 99
+            self.services["worker-pool"]["latency"] = 850
+            self.services["worker-pool"]["errors"] = 25.0
+            
+            # Job Queue backs up
+            self.services["job-queue"]["status"] = "critical"
+            self.services["job-queue"]["latency"] = 15000
+            self.services["job-queue"]["cpu"] = 80
+            self.services["job-queue"]["errors"] = 5.0
+            
+            # Checkout API depends on worker, begins returning slow responses
+            self.services["checkout-api"]["status"] = "degraded"
+            self.services["checkout-api"]["latency"] = 450
+            self.services["checkout-api"]["errors"] = 2.5
+            
+        elif scenario == "db_pool_exhaustion":
+            # DB saturation
+            self.services["db-primary"]["status"] = "critical"
+            self.services["db-primary"]["cpu"] = 99
+            self.services["db-primary"]["latency"] = 2500
+            self.services["db-primary"]["errors"] = 15.0
+            
+            # Auth and profile APIs fail directly
+            self.services["auth-service"]["status"] = "critical"
+            self.services["auth-service"]["latency"] = 4500
+            self.services["auth-service"]["errors"] = 50.0
+            
+            self.services["user-profile"]["status"] = "critical"
+            self.services["user-profile"]["latency"] = 3500
+            self.services["user-profile"]["errors"] = 45.0
+            
+            # API Gateway times out
+            self.services["api-gateway"]["status"] = "degraded"
+            self.services["api-gateway"]["latency"] = 800
+            
+        elif scenario == "api_latency":
+            self.services["api-gateway"]["status"] = "critical"
+            self.services["api-gateway"]["latency"] = 2400
+            self.services["api-gateway"]["cpu"] = 95
+            self.services["api-gateway"]["errors"] = 8.5
+            
+        elif scenario == "auth_instability":
+            # Auth service degrades
+            self.services["auth-service"]["status"] = "critical"
+            self.services["auth-service"]["latency"] = 5000
+            self.services["auth-service"]["errors"] = 92.0
+            
+            # API Gateway experiences degradation
+            self.services["api-gateway"]["status"] = "degraded"
+            self.services["api-gateway"]["latency"] = 620
 
     async def _run_loop(self):
         healthy_duration = 0
@@ -146,11 +296,9 @@ class SimulationEngine:
             if self.state == "HEALTHY":
                 self._tick_telemetry_healthy()
                 healthy_duration += 2
-                if healthy_duration >= 180: # Every 3 minutes
+                if healthy_duration >= 180: # Every 3 minutes trigger auto chaos
                     healthy_duration = 0
-                    self.state = "DEPLOYMENT"
-                    self.failing_service = random.choice(list(self.services.keys()))
-                    await self.broadcast("status_change", {"state": self.state, "message": f"Automated deployment to {self.failing_service} initiated."})
+                    await self.trigger_demo()
             
             elif self.state == "DEPLOYMENT":
                 healthy_duration = 0
@@ -160,15 +308,26 @@ class SimulationEngine:
                 if self.metrics["cpu"] > 60:
                     self.state = "ANOMALY"
                     inc_id = f"INC-{random.randint(8000, 9999)}"
+                    scenario = SCENARIOS[self.active_scenario_name]
                     self.active_incident = {
                         "id": inc_id,
-                        "service": self.failing_service,
-                        "severity": "SEV-1",
-                        "status": "active"
+                        "service": scenario["service"],
+                        "severity": scenario["severity"],
+                        "status": "active",
+                        "title": scenario["incident_title"],
+                        "impact": scenario["impact"],
+                        "scenario": self.active_scenario_name
                     }
-                    await self._update_db_incident_status(inc_id, "active")
+                    await self._update_db_incident_status(
+                        inc_id, 
+                        "active", 
+                        title=scenario["incident_title"], 
+                        service=scenario["service"], 
+                        severity=scenario["severity"], 
+                        impact=scenario["impact"]
+                    )
                     await self.broadcast("incident_created", self.active_incident)
-                    await self.broadcast("status_change", {"state": self.state, "message": "Anomaly detected during deployment."})
+                    await self.broadcast("status_change", {"state": self.state, "message": f"CRITICAL: {scenario['incident_title']} detected in production."})
             
             elif self.state == "ANOMALY":
                 self.metrics["latency"] += random.uniform(150, 300)
@@ -177,17 +336,17 @@ class SimulationEngine:
                 
                 self._cascade_failure()
                 
+                # Check latency threshold
                 if self.metrics["latency"] > 800:
-                    # Trigger RCA via Real AI Orchestrator
-                    await self.broadcast("ai_thinking", {"message": "AI Copilot analyzing real-time telemetry stream..."})
+                    await self.broadcast("ai_thinking", {"message": "AI Copilot performing log correlation & cross-service dependency tracing..."})
                     
-                    # Pass the full snapshot to the AI
                     snapshot = {
                         "global": self.metrics,
-                        "services": self.services
+                        "services": self.services,
+                        "scenario": self.active_scenario_name
                     }
                     
-                    # Async AI generation
+                    # Async AI generation (Gemini or local SRE fallback)
                     rca = await self.ai_engine.analyze_anomaly(self.failing_service, snapshot)
                     
                     self.active_incident.update(rca)
@@ -200,10 +359,10 @@ class SimulationEngine:
                         remediation_steps=rca.get("remediation_steps")
                     )
                     await self.broadcast("rca_ready", self.active_incident)
-                    await self.broadcast("status_change", {"state": self.state, "message": "AI Copilot has generated RCA."})
- 
+                    await self.broadcast("status_change", {"state": self.state, "message": "AI Copilot analysis ready. Root Cause Identified."})
+            
             elif self.state == "RCA_GENERATED":
-                 self._cascade_failure() # Continues failing
+                 self._cascade_failure()
                  self.metrics["latency"] = max(2400, min(5200, self.metrics["latency"] + random.uniform(-50, 50)))
                  self.metrics["cpu"] = max(90, min(99, self.metrics["cpu"] + random.uniform(-1, 1)))
                  self.metrics["errors"] = max(45, min(98, self.metrics["errors"] + random.uniform(-2, 2)))
@@ -214,17 +373,17 @@ class SimulationEngine:
                      rca_generated_duration = 0
                      if await self._is_auto_remediate_enabled():
                          await self.apply_remediation()
-
+ 
             elif self.state == "REMEDIATING":
                 # Gradual recovery
-                self.metrics["latency"] = max(18, self.metrics["latency"] - 500)
-                self.metrics["cpu"] = max(22, self.metrics["cpu"] - 15)
-                self.metrics["errors"] = max(0.1, self.metrics["errors"] - 15.0)
+                self.metrics["latency"] = max(18, self.metrics["latency"] - 600)
+                self.metrics["cpu"] = max(22, self.metrics["cpu"] - 20)
+                self.metrics["errors"] = max(0.1, self.metrics["errors"] - 18.0)
                 
                 for k, v in self.services.items():
-                    self.services[k]["latency"] = max(5, self.services[k]["latency"] - 200)
-                    self.services[k]["cpu"] = max(10, self.services[k]["cpu"] - 10)
-                    self.services[k]["errors"] = max(0, self.services[k]["errors"] - 5.0)
+                    self.services[k]["latency"] = max(5, self.services[k]["latency"] - 300)
+                    self.services[k]["cpu"] = max(10, self.services[k]["cpu"] - 15)
+                    self.services[k]["errors"] = max(0, self.services[k]["errors"] - 10.0)
                     if self.services[k]["latency"] < 100:
                         self.services[k]["status"] = "healthy"
                 
@@ -233,7 +392,7 @@ class SimulationEngine:
                     self.active_incident["status"] = "resolved"
                     await self._update_db_incident_status(self.active_incident["id"], "resolved")
                     await self.broadcast("incident_resolved", self.active_incident)
-                    await self.broadcast("status_change", {"state": self.state, "message": "System stabilized."})
+                    await self.broadcast("status_change", {"state": self.state, "message": "System stabilized. Incident successfully resolved."})
                     
             elif self.state == "RESOLVED":
                 self._tick_telemetry_healthy()
@@ -241,6 +400,7 @@ class SimulationEngine:
                     self.state = "HEALTHY"
                     self.active_incident = None
                     self.failing_service = None
+                    self.active_scenario_name = None
 
             # Always broadcast telemetry
             payload = {
@@ -254,7 +414,7 @@ class SimulationEngine:
     async def apply_remediation(self):
         if self.state == "RCA_GENERATED":
             self.state = "REMEDIATING"
-            await self._update_db_incident_status(self.active_incident["id"], "mitigated")
-            await self.broadcast("status_change", {"state": self.state, "message": "Applying AI suggested remediation."})
+            await self._update_db_incident_status(self.active_incident["id"], "resolved") # db status resolved
+            await self.broadcast("status_change", {"state": self.state, "message": "Applying AI-suggested remediation playbook commands..."})
             return True
         return False

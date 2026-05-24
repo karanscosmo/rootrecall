@@ -29,7 +29,11 @@ from database import engine, Base, SessionLocal, Incident, Postmortem, Operation
 from ai_orchestrator import ai_engine
 from simulation_engine import SimulationEngine
 
-limiter = Limiter(key_func=get_remote_address)
+rate_limiting_enabled = os.getenv("RATE_LIMITING_ENABLED", "true").lower() == "true"
+if os.getenv("ENV", "development").lower() == "development" or os.getenv("TESTING") == "true":
+    rate_limiting_enabled = False
+
+limiter = Limiter(key_func=get_remote_address, enabled=rate_limiting_enabled)
 app = FastAPI(title="RootRecall API")
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
@@ -124,7 +128,13 @@ async def startup_event():
     seed_database()
     simulation.start()
 
-from schemas import PostmortemCreate, SettingsUpdate, LoginRequest, SignupRequest, GoogleLoginRequest, IncidentResponse, PostmortemResponse, MemoryResponse
+from pydantic import BaseModel
+from typing import Optional
+from schemas import PostmortemCreate, SettingsUpdate, LoginRequest, SignupRequest, GoogleLoginRequest, IncidentResponse, PostmortemResponse, MemoryResponse, ChatRequest, ChatResponse
+
+class TriggerRequest(BaseModel):
+    scenario: Optional[str] = None
+
 
 # ─── Endpoints ───
 
@@ -135,8 +145,9 @@ def health_check(request: Request):
 
 @router.post("/demo/trigger")
 @limiter.limit("5/minute")
-async def trigger_demo(request: Request, current_user: User = Depends(get_current_admin)):
-    success = await simulation.trigger_demo()
+async def trigger_demo(request: Request, body: Optional[TriggerRequest] = None, current_user: User = Depends(get_current_admin)):
+    scenario = body.scenario if body else None
+    success = await simulation.trigger_demo(scenario)
     if not success:
         raise HTTPException(status_code=400, detail="Cannot trigger demo. System not in HEALTHY state.")
     return {"status": "Demo triggered"}
@@ -295,6 +306,106 @@ def create_postmortem(request: Request, pm_data: PostmortemCreate, db: Session =
     db.refresh(new_pm)
     return {"status": "created", "id": new_pm.id}
 
+@router.post("/postmortems/generate/{incident_id}")
+@limiter.limit("5/minute")
+async def generate_postmortem_endpoint(request: Request, incident_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_admin)):
+    try:
+        clean_inc_id = int(incident_id.replace("INC-", ""))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid incident ID format")
+        
+    inc = db.query(Incident).filter(Incident.id == clean_inc_id).first()
+    if not inc:
+        raise HTTPException(status_code=404, detail="Incident not found")
+        
+    # Construct metrics snapshot for AI
+    metrics_snapshot = {
+        "latency": simulation.metrics["latency"],
+        "cpu": simulation.metrics["cpu"],
+        "errors": simulation.metrics["errors"],
+        "services": simulation.services
+    }
+    
+    incident_dict = {
+        "id": f"INC-{inc.id}",
+        "title": inc.title,
+        "service": inc.service,
+        "severity": inc.severity,
+        "status": inc.status,
+        "impact": inc.impact,
+        "startedAt": inc.start_time.isoformat() + "Z" if inc.start_time else None,
+        "rootCause": inc.root_cause,
+        "aiConfidence": int(inc.confidence * 100) if inc.confidence else 0,
+        "remediationSteps": inc.remediation_steps or []
+    }
+    
+    pm_result = await ai_engine.generate_postmortem(incident_dict, metrics_snapshot)
+    
+    existing = db.query(Postmortem).filter(Postmortem.incident_id == clean_inc_id).first()
+    if existing:
+        existing.executive_summary = pm_result.get("executive_summary", "")
+        existing.root_cause_analysis = pm_result.get("root_cause_analysis", "")
+        existing.timeline = pm_result.get("timeline", [])
+        existing.prevention_items = pm_result.get("prevention_items", [])
+        db.commit()
+        db.refresh(existing)
+        return {"status": "updated", "id": existing.id}
+        
+    new_pm = Postmortem(
+        incident_id=clean_inc_id,
+        executive_summary=pm_result.get("executive_summary", ""),
+        root_cause_analysis=pm_result.get("root_cause_analysis", ""),
+        timeline=pm_result.get("timeline", []),
+        prevention_items=pm_result.get("prevention_items", [])
+    )
+    db.add(new_pm)
+    db.commit()
+    db.refresh(new_pm)
+    return {"status": "created", "id": new_pm.id}
+
+@router.post("/copilot/chat", response_model=ChatResponse)
+@limiter.limit("15/minute")
+async def copilot_chat_endpoint(request: Request, req: ChatRequest, db: Session = Depends(get_db)):
+    active_inc = None
+    if req.incidentId:
+        try:
+            clean_inc_id = int(req.incidentId.replace("INC-", ""))
+            active_inc = db.query(Incident).filter(Incident.id == clean_inc_id).first()
+        except ValueError:
+            pass
+            
+    if not active_inc:
+        if simulation.active_incident:
+            try:
+                clean_inc_id = int(simulation.active_incident["id"].replace("INC-", ""))
+                active_inc = db.query(Incident).filter(Incident.id == clean_inc_id).first()
+            except ValueError:
+                pass
+                
+    inc_dict = None
+    if active_inc:
+        inc_dict = {
+            "id": f"INC-{active_inc.id}",
+            "title": active_inc.title,
+            "service": active_inc.service,
+            "severity": active_inc.severity,
+            "status": active_inc.status,
+            "impact": active_inc.impact,
+            "rootCause": active_inc.root_cause or "Investigating metrics...",
+            "aiConfidence": int(active_inc.confidence * 100) if active_inc.confidence else 0,
+            "remediationSteps": active_inc.remediation_steps or []
+        }
+        
+    metrics_snapshot = {
+        "latency": simulation.metrics["latency"],
+        "cpu": simulation.metrics["cpu"],
+        "errors": simulation.metrics["errors"],
+        "services": simulation.services
+    }
+    
+    result = await ai_engine.copilot_chat(req.message, inc_dict, metrics_snapshot)
+    return result
+
 @router.get("/memory", response_model=List[MemoryResponse])
 @limiter.limit("60/minute")
 def get_memory(request: Request, db: Session = Depends(get_db)):
@@ -367,7 +478,7 @@ def signup(request: Request, req: SignupRequest, db: Session = Depends(get_db)):
         email=req.email,
         name=req.name,
         company=req.company,
-        role="user",
+        role=req.role,
         hashed_password=hash_password(req.password)
     )
     db.add(user)

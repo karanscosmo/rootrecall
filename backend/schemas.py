@@ -63,3 +63,15 @@ class MemoryResponse(BaseModel):
     lastSeen: Optional[str] = None
     recommendation: str
     relatedIncidents: list
+
+class ChatRequest(BaseModel):
+    message: str = Field(..., max_length=2000)
+    incidentId: Optional[str] = Field(None, max_length=50)
+
+class ChatResponse(BaseModel):
+    content: str
+    confidence: float
+    hasCode: bool
+    codeBlock: Optional[str] = None
+    recurrence_probability: Optional[str] = None
+    operational_impact: Optional[str] = None

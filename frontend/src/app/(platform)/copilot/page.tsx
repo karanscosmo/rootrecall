@@ -323,46 +323,63 @@ export default function CopilotPage() {
       setInput("");
       setIsLoading(true);
 
-      // Simulate AI response delay
-      await new Promise((r) => setTimeout(r, 1200));
-      
-      const currentMetrics = useStore.getState().metrics;
-      const lastMetric = currentMetrics[currentMetrics.length - 1];
-      const p99 = lastMetric?.latencyP99.toFixed(0) || "45";
-      
-      // Dynamic response based on context
-      let aiContent = "I am tracking live telemetry. Currently, P99 latency is at " + p99 + "ms.";
-      let conf = 85;
-      
-      if (trimmed.toLowerCase().includes("pattern") || trimmed.toLowerCase().includes("history")) {
-        const memory = aiMemories[0];
-        aiContent = memory ? `I found a matching pattern (${memory.similarity}% similar): **${memory.description}**.\n\nRecommendation: ${memory.recommendation}` : "No historical patterns match this current behavior.";
-        conf = memory?.similarity || 70;
-      } else if (trimmed.toLowerCase().includes("scale") || trimmed.toLowerCase().includes("remediate")) {
-        aiContent = `Based on the current load, I recommend scaling the affected services.\n\nExecute the following command to mitigate:`;
-        conf = 95;
-      } else if (contextIncident) {
-        aiContent = `Regarding ${contextIncident.id}: The incident is currently ${contextIncident.status}. The primary impact is ${contextIncident.impact}. \n\nP99 latency across the system is reading ${p99}ms.`;
-        conf = contextIncident.aiConfidence;
-      }
-
-      const aiMsg: ChatMessage = {
-        id: `msg-${Date.now()}-ai`,
-        role: "ai",
-        content: aiContent,
-        timestamp: new Date(),
-        confidence: conf,
-        codeBlock: trimmed.toLowerCase().includes("scale") ? `kubectl scale deploy/${contextIncident?.service || 'api-gateway'} --replicas=10` : undefined,
-        actions: [
-          { label: "View Live Metrics", icon: "chart" },
-          { label: "View Associated Logs", icon: "file" },
-        ],
+      const getApiBase = () => {
+        if (typeof window !== "undefined") {
+          return process.env.NEXT_PUBLIC_API_URL || `http://${window.location.hostname}:8000`;
+        }
+        return "http://localhost:8000";
       };
 
-      setMessages((prev) => [...prev, aiMsg]);
-      setIsLoading(false);
+      try {
+        const token = useStore.getState().user?.accessToken;
+        const apiBase = getApiBase();
+
+        const res = await fetch(`${apiBase}/copilot/chat`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { "Authorization": `Bearer ${token}` } : {})
+          },
+          body: JSON.stringify({
+            message: trimmed,
+            incidentId: contextIncident?.id
+          })
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          const aiMsg: ChatMessage = {
+            id: `msg-${Date.now()}-ai`,
+            role: "ai",
+            content: data.content,
+            timestamp: new Date(),
+            confidence: Math.round(data.confidence * 100),
+            hasCode: data.hasCode,
+            codeBlock: data.codeBlock,
+            actions: [
+              { label: "View Live Metrics", icon: "chart" },
+              { label: "View Associated Logs", icon: "file" },
+            ],
+          };
+          setMessages((prev) => [...prev, aiMsg]);
+        } else {
+          throw new Error("Chat request failed");
+        }
+      } catch (err) {
+        console.error("Copilot chat failed", err);
+        const errorMsg: ChatMessage = {
+          id: `msg-${Date.now()}-err`,
+          role: "ai",
+          content: "I encountered a connectivity issue trying to poll the SRE engine. Please check if the backend API is online.",
+          timestamp: new Date(),
+          confidence: 0
+        };
+        setMessages((prev) => [...prev, errorMsg]);
+      } finally {
+        setIsLoading(false);
+      }
     },
-    [isLoading, contextIncident, aiMemories]
+    [isLoading, contextIncident]
   );
 
   const handleSubmit = (e: React.FormEvent) => {

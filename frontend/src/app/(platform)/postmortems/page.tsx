@@ -82,44 +82,11 @@ export default function PostmortemsPage() {
     setGenerating(true);
 
     try {
-      const startedTime = target.startedAt ? new Date(target.startedAt) : new Date();
-      const resolvedTime = target.resolvedAt ? new Date(target.resolvedAt) : new Date(startedTime.getTime() + 15 * 60 * 1000);
-      
-      const durationMin = Math.round((resolvedTime.getTime() - startedTime.getTime()) / 60000);
-      
-      const executiveSummary = `On ${startedTime.toLocaleDateString()} at ${startedTime.toLocaleTimeString()}, a high-severity incident was triggered for ${target.service} (${target.severity}). The operational impact was flagged as: "${target.impact || 'Service degradation and heightened response latencies'}" affecting downstream systems. Automated analysis matched this footprint to historical patterns, and SRE runbooks were deployed to stabilize performance. The system was fully restored after a total duration of ${durationMin} minutes.`;
-
-      const rootCauseAnalysis = target.rootCause || `The root cause was identified as connection pooling contention and queue delays inside the ${target.service} container environment, leading to cascaded timeout failures in caller services.`;
-
-      const timeline = [
-        { time: startedTime.toLocaleTimeString(), description: `Anomaly detected: elevated latency threshold breached on ${target.service}.` },
-        { time: new Date(startedTime.getTime() + 2 * 60000).toLocaleTimeString(), description: `AI Copilot correlates logs and identifies root cause: "${target.rootCause || 'resource saturation'}".` },
-        { time: resolvedTime.toLocaleTimeString(), description: `Remediation playbook execution complete. Metrics returned to normal.` }
-      ];
-
-      const preventionItems = [
-        `Optimize the database connection pool settings and connection timeout limits for the ${target.service} service.`,
-        `Add automated synthetic monitoring and endpoint health check validation probes in deployment validation suites.`,
-        `Configure load shedding and circuit breakers on client services calling ${target.service}.`
-      ];
-
-      const body = {
-        incidentId: target.id,
-        executiveSummary,
-        rootCauseAnalysis,
-        timeline,
-        preventionItems
-      };
-
       const token = useStore.getState().user?.accessToken;
 
-      const res = await fetch(`${getApiBase()}/postmortems`, {
+      const res = await fetch(`${getApiBase()}/postmortems/generate/${target.id}`, {
         method: "POST",
-        headers: { 
-          "Content-Type": "application/json",
-          ...(token ? { "Authorization": `Bearer ${token}` } : {})
-        },
-        body: JSON.stringify(body),
+        headers: token ? { "Authorization": `Bearer ${token}` } : {}
       });
 
       if (res.ok) {
