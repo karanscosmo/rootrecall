@@ -224,6 +224,8 @@ OR
 
 # Demo Flow
 
+📺 **[Watch the full product simulation video here](https://drive.google.com/file/d/1lt2wB8-XP_elHoodfndBV5We9yTMzKMk/view?usp=share_link)**
+
 1. Trigger deployment
 2. Simulate outage
 3. Detect anomaly
