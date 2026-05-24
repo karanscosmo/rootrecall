@@ -11,3 +11,6 @@ python-jose[cryptography]==3.5.0
 passlib[bcrypt]==1.7.4
 python-multipart==0.0.29
 slowapi==0.1.9
+secure==0.3.0
+structlog==24.4.0
+bcrypt==4.2.0
