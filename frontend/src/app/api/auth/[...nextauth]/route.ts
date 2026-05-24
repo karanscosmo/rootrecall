@@ -5,8 +5,8 @@ import CredentialsProvider from "next-auth/providers/credentials";
 export const authOptions: NextAuthOptions = {
   providers: [
     GoogleProvider({
-      clientId: process.env.GOOGLE_CLIENT_ID || "",
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
+      clientId: process.env.GOOGLE_CLIENT_ID || "missing-google-client-id",
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET || "missing-google-client-secret",
     }),
     CredentialsProvider({
       name: 'Credentials',
@@ -86,7 +86,7 @@ export const authOptions: NextAuthOptions = {
     }
   },
   pages: {
-    signIn: "/auth/login",
+    signIn: "/login",
   },
   secret: process.env.NEXTAUTH_SECRET || "fallback-secret-for-development"
 };

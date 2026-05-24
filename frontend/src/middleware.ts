@@ -6,6 +6,7 @@ export default withAuth(
     return NextResponse.next();
   },
   {
+    secret: process.env.NEXTAUTH_SECRET || "fallback-secret-for-development",
     callbacks: {
       authorized: ({ req, token }) => {
         const path = req.nextUrl.pathname;
@@ -17,7 +18,7 @@ export default withAuth(
       },
     },
     pages: {
-      signIn: "/auth/login",
+      signIn: "/login",
     }
   }
 );
