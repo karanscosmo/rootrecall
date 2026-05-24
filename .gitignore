@@ -1,25 +1,59 @@
 # Root Gitignore for RootRecall project
 
-# Python virtual environment
+# Dependency directories
+node_modules/
+frontend/node_modules/
+
+# Next.js and frontend build artifacts
+.next/
+frontend/.next/
+out/
+frontend/out/
+build/
+frontend/build/
+dist/
+backend/dist/
+
+# Python virtual environment and caching
+venv/
 backend/venv/
+__pycache__/
 backend/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local databases and journals
+*.db
+*.db-journal
 backend/*.db
 backend/*.db-journal
-
-# Next.js and frontend artifacts
-frontend/node_modules/
-frontend/.next/
-frontend/out/
-frontend/build/
 
 # OS files
 .DS_Store
 Thumbs.db
+ehthumbs.db
+Desktop.ini
 
-# Environment variables
+# Environment files and secrets
 .env
 .env.local
 .env.development
 .env.test
 .env.production
 *.env
+
+# IDE / Editor configurations
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+*.tsbuildinfo
+frontend/tsconfig.tsbuildinfo
+
