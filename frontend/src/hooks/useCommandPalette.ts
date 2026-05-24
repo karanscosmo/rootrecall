@@ -71,7 +71,11 @@ export function useCommandActions() {
             const apiBase = typeof window !== 'undefined'
               ? (process.env.NEXT_PUBLIC_API_URL || `http://${window.location.hostname}:8000`)
               : 'http://localhost:8000';
-            await fetch(`${apiBase}/demo/trigger`, { method: "POST" });
+            const token = useStore.getState().user?.accessToken;
+            await fetch(`${apiBase}/demo/trigger`, { 
+              method: "POST",
+              headers: token ? { "Authorization": `Bearer ${token}` } : {}
+            });
             close();
           } catch (e) {
             console.error("Failed to trigger demo", e);

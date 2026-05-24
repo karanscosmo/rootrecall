@@ -23,6 +23,17 @@ export default function PostmortemsPage() {
   const [postmortems, setPostmortems] = useState<PostmortemData[]>([]);
   const [selectedPM, setSelectedPM] = useState<PostmortemData | null>(null);
   const [generating, setGenerating] = useState(false);
+  const [targetIncidentId, setTargetIncidentId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const incId = params.get("incidentId");
+      if (incId) {
+        setTargetIncidentId(incId);
+      }
+    }
+  }, []);
 
   const incidents = useStore((s) => s.incidents);
   const fetchIncidents = useStore((s) => s.fetchIncidents);
@@ -36,7 +47,10 @@ export default function PostmortemsPage() {
 
   const loadPostmortems = async () => {
     try {
-      const res = await fetch(`${getApiBase()}/api/postmortems`);
+      const token = useStore.getState().user?.accessToken;
+      const res = await fetch(`${getApiBase()}/postmortems`, {
+        headers: token ? { "Authorization": `Bearer ${token}` } : {}
+      });
       if (res.ok) {
         const data = await res.json();
         setPostmortems(data);
@@ -61,31 +75,50 @@ export default function PostmortemsPage() {
     (i) => (i.status === "mitigated" || i.status === "resolved") && !i.postmortemGenerated
   );
 
+  const target = pendingIncidents.find((i) => i.id === targetIncidentId) || pendingIncidents[0];
+
   const handleGenerate = async () => {
-    if (pendingIncidents.length === 0) return;
+    if (!target) return;
     setGenerating(true);
-    const target = pendingIncidents[0];
 
     try {
       const startedTime = target.startedAt ? new Date(target.startedAt) : new Date();
+      const resolvedTime = target.resolvedAt ? new Date(target.resolvedAt) : new Date(startedTime.getTime() + 15 * 60 * 1000);
+      
+      const durationMin = Math.round((resolvedTime.getTime() - startedTime.getTime()) / 60000);
+      
+      const executiveSummary = `On ${startedTime.toLocaleDateString()} at ${startedTime.toLocaleTimeString()}, a high-severity incident was triggered for ${target.service} (${target.severity}). The operational impact was flagged as: "${target.impact || 'Service degradation and heightened response latencies'}" affecting downstream systems. Automated analysis matched this footprint to historical patterns, and SRE runbooks were deployed to stabilize performance. The system was fully restored after a total duration of ${durationMin} minutes.`;
+
+      const rootCauseAnalysis = target.rootCause || `The root cause was identified as connection pooling contention and queue delays inside the ${target.service} container environment, leading to cascaded timeout failures in caller services.`;
+
+      const timeline = [
+        { time: startedTime.toLocaleTimeString(), description: `Anomaly detected: elevated latency threshold breached on ${target.service}.` },
+        { time: new Date(startedTime.getTime() + 2 * 60000).toLocaleTimeString(), description: `AI Copilot correlates logs and identifies root cause: "${target.rootCause || 'resource saturation'}".` },
+        { time: resolvedTime.toLocaleTimeString(), description: `Remediation playbook execution complete. Metrics returned to normal.` }
+      ];
+
+      const preventionItems = [
+        `Optimize the database connection pool settings and connection timeout limits for the ${target.service} service.`,
+        `Add automated synthetic monitoring and endpoint health check validation probes in deployment validation suites.`,
+        `Configure load shedding and circuit breakers on client services calling ${target.service}.`
+      ];
+
       const body = {
         incidentId: target.id,
-        executiveSummary: `On ${startedTime.toLocaleDateString()}, root cause analysis isolated a critical dependency failure in ${target.service}. Customer checkout rates fell to zero, representing critical revenue risk.`,
-        rootCauseAnalysis: target.rootCause || "Redis connection pool exhaustion due to v2.4.1 deployment queries.",
-        timeline: [
-          { time: "12:00:00 UTC", description: `Alert declared for ${target.service} latency breach.` },
-          { time: "12:03:42 UTC", description: "AI Copilot analysis completes matching Redis saturation signature." },
-          { time: "12:15:00 UTC", description: "Remediation applied successfully; metrics returned to normal." }
-        ],
-        preventionItems: [
-          `Audit connection pooling configuration for ${target.service}.`,
-          "Introduce automatic query validation check in deployment pipelines."
-        ]
+        executiveSummary,
+        rootCauseAnalysis,
+        timeline,
+        preventionItems
       };
 
-      const res = await fetch(`${getApiBase()}/api/postmortems`, {
+      const token = useStore.getState().user?.accessToken;
+
+      const res = await fetch(`${getApiBase()}/postmortems`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          ...(token ? { "Authorization": `Bearer ${token}` } : {})
+        },
         body: JSON.stringify(body),
       });
 
@@ -122,12 +155,27 @@ export default function PostmortemsPage() {
                 <span className="material-symbols-outlined text-rr-green" style={{ fontSize: 14, fontVariationSettings: "'FILL' 1" }}>auto_awesome</span>
                 <span className="font-mono text-[11px] text-rr-green">{pendingIncidents.length} ready to generate</span>
               </div>
+              
+              {pendingIncidents.length > 1 && (
+                <select
+                  value={targetIncidentId || ""}
+                  onChange={(e) => setTargetIncidentId(e.target.value)}
+                  className="w-full bg-rr-bg border border-rr-border text-rr-text font-mono text-[11px] px-2 py-1.5 rounded mb-2.5 focus:outline-none focus:border-rr-green/40 cursor-pointer"
+                >
+                  {pendingIncidents.map(inc => (
+                    <option key={inc.id} value={inc.id}>
+                      {inc.id} - {inc.service}
+                    </option>
+                  ))}
+                </select>
+              )}
+
               <button
                 onClick={handleGenerate}
                 disabled={generating}
                 className="w-full bg-rr-green text-rr-bg font-mono text-[11px] py-1.5 rounded-md hover:opacity-90 transition-opacity disabled:opacity-50 font-bold"
               >
-                {generating ? "Generating..." : "Generate AI Postmortem"}
+                {generating ? "Generating..." : `Generate PM for ${target?.id || pendingIncidents[0]?.id}`}
               </button>
             </div>
           </div>

@@ -8,6 +8,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useStore } from "@/store";
 import { cn, formatRelativeTime } from "@/lib/utils";
+import { useRouter } from "next/navigation";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -141,9 +142,11 @@ function CodeBlock({ code }: { code: string }) {
 function ChatMessageBubble({
   message,
   isLoading,
+  onActionClick,
 }: {
   message: ChatMessage;
   isLoading?: boolean;
+  onActionClick?: (label: string) => void;
 }) {
   if (message.role === "user") {
     return (
@@ -209,6 +212,7 @@ function ChatMessageBubble({
                   {message.actions.map((action) => (
                     <button
                       key={action.label}
+                      onClick={() => onActionClick?.(action.label)}
                       className="flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-rr-border text-[11px] text-rr-muted hover:text-rr-green hover:border-rr-green/40 transition-all"
                     >
                       {action.icon === "chart" ? (
@@ -239,6 +243,7 @@ function ChatMessageBubble({
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function CopilotPage() {
+  const router = useRouter();
   const incidents = useStore((s) => s.incidents);
   const services = useStore((s) => s.services);
   const aiMemories = useStore((s) => s.aiMemories);
@@ -251,6 +256,18 @@ export default function CopilotPage() {
   const contextIncident = incidents.find(i => i.id === selectedIncidentId) || 
                           incidents.find(i => i.status === "active") || 
                           incidents[0];
+
+  const handleActionClick = useCallback((actionLabel: string) => {
+    if (actionLabel === "View Live Metrics") {
+      router.push("/health");
+    } else if (actionLabel === "View Associated Logs") {
+      if (contextIncident) {
+        router.push(`/incidents/${contextIncident.id}`);
+      } else {
+        router.push("/incidents");
+      }
+    }
+  }, [router, contextIncident]);
 
   // Dynamic initial messages
   const initialMessages: ChatMessage[] = contextIncident ? [
@@ -374,7 +391,10 @@ export default function CopilotPage() {
           <h2 className="text-xs font-semibold text-rr-text tracking-tight">
             Active Context
           </h2>
-          <button className="flex items-center gap-1 px-2 py-1 rounded-md bg-rr-green/10 border border-rr-green/30 text-rr-green text-[10px] font-semibold hover:bg-rr-green/20 transition-colors">
+          <button 
+            onClick={() => setMessages(initialMessages)}
+            className="flex items-center gap-1 px-2 py-1 rounded-md bg-rr-green/10 border border-rr-green/30 text-rr-green text-[10px] font-semibold hover:bg-rr-green/20 transition-colors"
+          >
             <svg viewBox="0 0 24 24" className="w-3 h-3 fill-current">
               <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
             </svg>
@@ -481,7 +501,7 @@ export default function CopilotPage() {
         {/* Message feed */}
         <div className="flex-1 overflow-y-auto p-6 pb-2">
           {messages.map((msg) => (
-            <ChatMessageBubble key={msg.id} message={msg} />
+            <ChatMessageBubble key={msg.id} message={msg} onActionClick={handleActionClick} />
           ))}
           {isLoading && (
             <div className="flex items-start gap-2.5 mb-4">

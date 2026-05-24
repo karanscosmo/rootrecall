@@ -215,7 +215,10 @@ export const useStore = create<RootRecallStore>((set, get) => ({
       const apiBase = typeof window !== 'undefined'
         ? (process.env.NEXT_PUBLIC_API_URL || `http://${window.location.hostname}:8000`)
         : 'http://localhost:8000';
-      const res = await fetch(`${apiBase}/incidents`);
+      const token = get().user?.accessToken;
+      const res = await fetch(`${apiBase}/incidents`, {
+        headers: token ? { "Authorization": `Bearer ${token}` } : {}
+      });
       if (res.ok) {
         const data = await res.json();
         const formatted = data.map((inc: any) => ({
@@ -236,7 +239,10 @@ export const useStore = create<RootRecallStore>((set, get) => ({
       const apiBase = typeof window !== 'undefined'
         ? (process.env.NEXT_PUBLIC_API_URL || `http://${window.location.hostname}:8000`)
         : 'http://localhost:8000';
-      const res = await fetch(`${apiBase}/memory`);
+      const token = get().user?.accessToken;
+      const res = await fetch(`${apiBase}/memory`, {
+        headers: token ? { "Authorization": `Bearer ${token}` } : {}
+      });
       if (res.ok) {
         const data = await res.json();
         const formatted = data.map((m: any) => ({

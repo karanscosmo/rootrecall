@@ -127,7 +127,10 @@ export default function SettingsPage() {
 
   const loadSettings = async () => {
     try {
-      const res = await fetch(`${getApiBase()}/api/settings`);
+      const token = useStore.getState().user?.accessToken;
+      const res = await fetch(`${getApiBase()}/settings`, {
+        headers: token ? { "Authorization": `Bearer ${token}` } : {}
+      });
       if (res.ok) {
         const data = await res.json();
         
@@ -207,9 +210,13 @@ export default function SettingsPage() {
   const handleSaveSetting = async (key: string, value: any) => {
     setSaving(true);
     try {
-      const res = await fetch(`${getApiBase()}/api/settings`, {
+      const token = useStore.getState().user?.accessToken;
+      const res = await fetch(`${getApiBase()}/settings`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          ...(token ? { "Authorization": `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({ key, value }),
       });
       if (res.ok) {
@@ -246,9 +253,13 @@ export default function SettingsPage() {
 
     setSaving(true);
     try {
-      const res = await fetch(`${getApiBase()}/api/settings`, {
+      const token = useStore.getState().user?.accessToken;
+      const res = await fetch(`${getApiBase()}/settings`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          ...(token ? { "Authorization": `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({
           key: "integrations",
           value: integrationsObj,
@@ -289,9 +300,13 @@ export default function SettingsPage() {
     });
 
     try {
-      await fetch(`${getApiBase()}/api/settings`, {
+      const token = useStore.getState().user?.accessToken;
+      await fetch(`${getApiBase()}/settings`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          ...(token ? { "Authorization": `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({
           key: "integrations",
           value: integrationsObj,
