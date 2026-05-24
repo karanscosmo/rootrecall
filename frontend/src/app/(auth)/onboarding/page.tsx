@@ -81,6 +81,25 @@ const SERVICES = [
 type ServiceId = typeof SERVICES[number]["id"];
 type Status = "idle" | "connecting" | "connected" | "error";
 
+// ── Helpers ───────────────────────────────────────────────────────────────
+const getApiBase = () =>
+  process.env.NEXT_PUBLIC_API_URL ||
+  (typeof window !== "undefined" ? `http://${window.location.hostname}:8000` : "");
+
+async function postSetting(key: string, value: string) {
+  const base = getApiBase();
+  if (!base) return;
+  try {
+    await fetch(`${base}/api/settings`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key, value }),
+    });
+  } catch {
+    // Backend unreachable — fail silently, continue onboarding
+  }
+}
+
 export default function OnboardingPage() {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -90,6 +109,15 @@ export default function OnboardingPage() {
   const [modalSvc, setModalSvc]       = useState<typeof SERVICES[number] | null>(null);
   const [formValues, setFormValues]   = useState<Record<string, string>>({});
   const [formError, setFormError]     = useState("");
+
+  // Alert threshold state (step 3)
+  const [latencyThreshold, setLatencyThreshold] = useState(2000);
+  const [errorThreshold,   setErrorThreshold]   = useState(5);
+  const [channels, setChannels] = useState<Record<string, boolean>>({
+    slack:      true,
+    pagerduty:  true,
+    email:      true,
+  });
 
   const getStatus = (id: ServiceId): Status => statuses[id] ?? "idle";
 
@@ -126,6 +154,17 @@ export default function OnboardingPage() {
   };
 
   const nextStep = async () => {
+    // On step 3 → save alert config to backend
+    if (step === 3) {
+      await Promise.all([
+        postSetting("p99_latency_threshold_ms",   String(latencyThreshold)),
+        postSetting("error_rate_threshold_pct",   String(errorThreshold)),
+        postSetting("notify_slack",               String(channels.slack)),
+        postSetting("notify_pagerduty",           String(channels.pagerduty)),
+        postSetting("notify_email",               String(channels.email)),
+        postSetting("integrations_connected",     connectedCount.toString()),
+      ]);
+    }
     if (step === 4) {
       setLoading(true);
       await new Promise(r => setTimeout(r, 1200));
@@ -228,27 +267,78 @@ export default function OnboardingPage() {
                 <p className="font-mono text-[12px] text-rr-muted mt-1">Define baseline thresholds and notification channels.</p>
               </div>
               <div className="space-y-5">
-                {[
-                  { label: "P99 Latency Threshold (SEV-1)", min: 100, max: 5000, defaultVal: 2000, unit: "ms" },
-                  { label: "Error Rate Threshold (SEV-1)",  min: 1,   max: 100,  defaultVal: 5,    unit: "%" },
-                ].map(cfg => (
-                  <div key={cfg.label} className="space-y-2">
-                    <label className="font-mono text-[11px] text-rr-muted">{cfg.label}</label>
-                    <input type="range" min={cfg.min} max={cfg.max} defaultValue={cfg.defaultVal}
-                      className="w-full accent-rr-green" />
-                    <div className="flex justify-between font-mono text-[10px] text-rr-muted">
-                      <span>{cfg.min}{cfg.unit}</span><span>{cfg.max}{cfg.unit}</span>
-                    </div>
+
+                {/* ── P99 Latency Slider ── */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="font-mono text-[11px] text-rr-muted">P99 Latency Threshold (SEV-1)</label>
+                    <span className="font-mono text-[13px] font-bold text-rr-green">{latencyThreshold.toLocaleString()} ms</span>
                   </div>
-                ))}
+                  <input
+                    type="range" min={100} max={5000} step={50}
+                    value={latencyThreshold}
+                    onChange={e => setLatencyThreshold(Number(e.target.value))}
+                    className="w-full accent-rr-green cursor-pointer"
+                  />
+                  <div className="flex justify-between font-mono text-[10px] text-rr-muted">
+                    <span>100ms (strict)</span><span>5,000ms (permissive)</span>
+                  </div>
+                  <div className="font-mono text-[10px] text-rr-muted">
+                    {latencyThreshold <= 500  && "⚡ Tight — will alert on minor slowdowns"}
+                    {latencyThreshold > 500  && latencyThreshold <= 2000 && "✓ Recommended for production"}
+                    {latencyThreshold > 2000 && "⚠ Permissive — only severe spikes will trigger"}
+                  </div>
+                </div>
+
+                {/* ── Error Rate Slider ── */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="font-mono text-[11px] text-rr-muted">Error Rate Threshold (SEV-1)</label>
+                    <span className="font-mono text-[13px] font-bold text-rr-green">{errorThreshold}%</span>
+                  </div>
+                  <input
+                    type="range" min={1} max={50} step={1}
+                    value={errorThreshold}
+                    onChange={e => setErrorThreshold(Number(e.target.value))}
+                    className="w-full accent-rr-green cursor-pointer"
+                  />
+                  <div className="flex justify-between font-mono text-[10px] text-rr-muted">
+                    <span>1% (strict)</span><span>50% (permissive)</span>
+                  </div>
+                  <div className="font-mono text-[10px] text-rr-muted">
+                    {errorThreshold <= 2  && "⚡ Tight — good for zero-downtime SLAs"}
+                    {errorThreshold > 2  && errorThreshold <= 10 && "✓ Recommended for most production workloads"}
+                    {errorThreshold > 10 && "⚠ Permissive — may miss early degradation"}
+                  </div>
+                </div>
+
+                {/* ── Notification Channels ── */}
                 <div className="pt-4 border-t border-rr-border space-y-3">
                   <label className="font-mono text-[11px] text-rr-muted uppercase tracking-widest">Notification Channels</label>
-                  {["Slack (#incidents)", "PagerDuty (Primary On-Call)", "Email digest"].map(ch => (
-                    <label key={ch} className="flex items-center gap-3 cursor-pointer">
-                      <input type="checkbox" defaultChecked className="accent-rr-green w-4 h-4" />
-                      <span className="font-mono text-[12px] text-rr-text">{ch}</span>
+                  {([
+                    { key: "slack",     label: "Slack (#incidents)",          connected: getStatus("slack")      === "connected" },
+                    { key: "pagerduty", label: "PagerDuty (Primary On-Call)", connected: getStatus("pagerduty")  === "connected" },
+                    { key: "email",     label: "Email digest",                connected: true },
+                  ] as const).map(ch => (
+                    <label key={ch.key} className="flex items-center gap-3 cursor-pointer group">
+                      <input
+                        type="checkbox"
+                        checked={channels[ch.key]}
+                        onChange={e => setChannels(c => ({ ...c, [ch.key]: e.target.checked }))}
+                        className="accent-rr-green w-4 h-4 cursor-pointer"
+                      />
+                      <span className="font-mono text-[12px] text-rr-text group-hover:text-rr-green transition-colors">{ch.label}</span>
+                      {ch.connected && (ch.key as string) !== "email" && (
+                        <span className="font-mono text-[9px] text-rr-green bg-rr-green/10 border border-rr-green/20 px-1.5 py-0.5 rounded-full ml-auto">connected ✓</span>
+                      )}
+                      {!ch.connected && (ch.key as string) !== "email" && (
+                        <span className="font-mono text-[9px] text-rr-muted ml-auto">not connected</span>
+                      )}
                     </label>
                   ))}
+                  <p className="font-mono text-[10px] text-rr-muted pt-1">
+                    Settings will be saved to your workspace and applied immediately.
+                  </p>
                 </div>
               </div>
             </div>
