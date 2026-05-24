@@ -6,7 +6,6 @@ from sqlalchemy.orm import Session
 import asyncio
 import json
 import os
-import secure
 import structlog
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
@@ -43,20 +42,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-secure_headers = secure.Secure(
-    server=secure.Server().set("RootRecall-Enterprise-Server"),
-    csp=secure.ContentSecurityPolicy().default_src("'self'").frame_ancestors("'none'").upgrade_insecure_requests(),
-    hsts=secure.StrictTransportSecurity().include_subdomains().preload().max_age(31536000),
-    referrer=secure.ReferrerPolicy().no_referrer(),
-    cache=secure.CacheControl().no_cache().no_store().must_revalidate(),
-    xss=secure.XXSSProtection().enable_block(),
-    content_type=secure.XContentTypeOptions().nosniff(),
-)
-
 @app.middleware("http")
 async def set_secure_headers(request, call_next):
     response = await call_next(request)
-    secure_headers.set_headers(response)
+    response.headers["Content-Security-Policy"] = "default-src 'self'; frame-ancestors 'none'; upgrade-insecure-requests;"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
     return response
 
 # ─── Auth ───
