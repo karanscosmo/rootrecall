@@ -161,11 +161,17 @@ The FastAPI backend requires a persistent process (background simulation engine 
 
 1. Go to [railway.app](https://railway.app) → **New Project** → **Deploy from GitHub Repo**
 2. Select `karanscosmo/rootrecall`
-3. Set **Root Directory** to `backend`
-4. Railway auto-detects Python → click **Deploy**
-5. After deploy: go to **Settings → Networking → Generate Domain**
-6. Copy the generated URL (e.g. `https://rootrecall-production.up.railway.app`)
-7. Paste it into Vercel as `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_WS_URL` (with `wss://` prefix)
+3. Railway creates the service and starts an initial deploy (it will fail — that's expected)
+4. Click on the **`rootrecall` service box** on the canvas to open the service panel
+5. Click the **"Settings"** tab in the service panel
+6. Under **"Source Repo"** → click **"Add Root Directory"** → type `backend` → Save
+7. Railway automatically redeploys from the `backend/` folder — this time it succeeds ✅
+8. After deploy succeeds → go to **Settings → Networking → Generate Domain**
+9. Copy the generated URL (e.g. `https://rootrecall-production.up.railway.app`)
+10. Paste it into Vercel as `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_WS_URL` (with `wss://` prefix)
+
+> ⚠️ The `railway.json` and `runtime.txt` (Python 3.11) inside `backend/` are pre-configured — no additional build settings needed once Root Directory is set.
+
 
 #### Option B — Render
 
