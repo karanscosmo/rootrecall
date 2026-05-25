@@ -1,10 +1,10 @@
 # RootRecall
 
-> Turn incidents into intelligence.
+> Turn operational chaos into structured intelligence.
 
-RootRecall is an AI-native incident intelligence platform built for modern engineering teams to analyze outages, reconstruct failures, automate postmortems, and generate operational insights in realtime.
+RootRecall is an AI-native incident intelligence platform built for modern engineering teams to analyze outages, reconstruct failures, automate postmortems, and generate operational insights in realtime. 
 
-Designed with an enterprise-first mindset, RootRecall combines AI-assisted root cause analysis, incident replay, telemetry correlation, and operational memory into a unified experience.
+Designed with an enterprise-first mindset, RootRecall combines AI-assisted root cause analysis, incident replay, telemetry correlation, and operational memory into a unified, calm experience.
 
 ![RootRecall Landing Page](docs/landing.png)
 
@@ -12,240 +12,173 @@ Designed with an enterprise-first mindset, RootRecall combines AI-assisted root 
 
 ---
 
-# Overview
+## Human Contribution vs AI-Assisted Development
 
-Modern infrastructure generates massive operational noise:
-- logs
-- metrics
-- alerts
-- deployment events
-- traces
-- failures
+RootRecall was built with a clear distinction between human engineering and AI acceleration. The core product vision, system architecture, and operational logic were entirely human-driven, while AI served as a powerful development accelerant.
 
-RootRecall transforms this fragmented operational data into structured incident intelligence.
+**Human Engineered:**
+- Product concept and positioning
+- System design and architecture direction
+- UI/UX ideation and operational workflows
+- Incident simulation concepts and flow
+- Feature prioritization and selection
+- Complex debugging decisions
+- Final implementation validation and orchestration
 
-Instead of manually debugging outages across multiple dashboards, engineering teams can:
-- replay incidents visually
-- analyze root causes using AI
-- generate postmortems automatically
-- correlate deployments with failures
-- identify recurring operational patterns
-- improve incident response speed
+**AI Assisted:**
+- Boilerplate code generation and acceleration
+- Tactical code suggestions and refactoring
+- Documentation formatting and refinement
+- Workflow automation scripts
+- Rapid UI iteration and component scaffolding
 
----
-
-# Core Features
-
-## AI Incident Copilot
-Conversational AI assistant for:
-- root cause analysis
-- infrastructure explanations
-- outage summaries
-- rollback guidance
-- recurrence prediction
-- remediation recommendations
+This hybrid approach allowed us to maintain strict architectural control while significantly accelerating execution speed during the development lifecycle.
 
 ---
 
-## Incident Replay Engine
-Cinematic operational replay system that reconstructs:
-- deployment timelines
-- infrastructure failures
-- cascading outages
-- latency spikes
-- service degradation
+## Development Journey
 
-![Incident Replay Engine](docs/replay.png)
+The engineering journey of RootRecall followed a structured progression from problem identification to deployment:
 
----
+**Problem** → **Research** → **Architecture** → **Design** → **Backend** → **AI Layer** → **Automation** → **Deployment**
 
-## AI Postmortem Generator
-Automatically generates:
-- incident summaries
-- RCA reports
-- impact analysis
-- lessons learned
-- prevention recommendations
-- operational timelines
+Modern infrastructure generates massive operational noise—logs, metrics, alerts, and deployment events. Existing observability platforms often present this data as fragmented dashboards, requiring engineers to manually correlate events during high-stress outages.
+
+We designed RootRecall differently. We conceptualized an **AI replay engine** that doesn't just show charts, but visually reconstructs the incident timeline. By introducing an **operational memory** system, the platform remembers past failures to provide contextual insights. The simulation engine processes telemetry data to create a believable incident flow, while the UI focuses on calm operational clarity, reducing cognitive load when it matters most.
 
 ---
 
-## Realtime Operational Dashboard
-Unified command center with:
-- live telemetry
-- incident streams
-- deployment tracking
-- service health
-- AI insights
-- anomaly detection
+## Real-World Comparison
+
+RootRecall is designed to complement and enhance modern observability stacks by focusing on AI-native intelligence rather than pure metric ingestion.
+
+| Feature | RootRecall | PagerDuty | Datadog | Grafana | Splunk |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **AI-Native Incident Replay** | Yes | No | Limited | No | No |
+| **Cinematic Outage Reconstruction** | Yes | No | No | No | No |
+| **AI Postmortem Generation** | Yes | Yes (Add-on) | Yes | Limited | Yes |
+| **Operational Memory Engine** | Yes | Limited | Limited | No | No |
+| **Conversational RCA** | Yes | No | Yes | No | Limited |
+| **Deployment Correlation** | Yes | Limited | Yes | Yes | Yes |
+| **Incident Similarity Detection** | Yes | Yes | Yes | No | Yes |
+| **Human-Readable Incident Narration**| Yes | No | Limited | No | No |
+| **Replay-First Debugging** | Yes | No | No | No | No |
+| **AI Copilot Workflows** | Yes | Yes | Yes | Limited | Yes |
 
 ---
 
-## Operational Memory System
-RootRecall stores historical operational context to:
-- compare incidents
-- detect recurring failures
-- identify deployment patterns
-- improve engineering response quality
+## Architecture
 
----
+RootRecall employs a modern, decoupled architecture designed for realtime operational intelligence.
 
-# Tech Stack
+```mermaid
+graph TD
+    subgraph Frontend Architecture
+        UI[Next.js App Router]
+        State[React Context / Hooks]
+        Vis[Framer Motion & Recharts]
+    end
 
-## Frontend
-- Next.js
-- TypeScript
-- TailwindCSS
-- shadcn/ui
-- Framer Motion
-- Recharts
+    subgraph Backend Architecture
+        API[Node.js / Express]
+        WS[WebSocket Layer]
+        AuthSys[Auth System]
+    end
 
-## Backend
-- FastAPI
-- PostgreSQL
-- WebSockets
-- Redis
-- SQLAlchemy
+    subgraph Intelligence & Automation
+        Orchestrator[AI Orchestration Layer]
+        Replay[Incident Replay Engine]
+        AutoEngine[Automation Engine]
+        Telemetry[Telemetry Pipeline]
+    end
 
-## AI
-- OpenAI API / Gemini API
-- AI orchestration layer
-- contextual incident reasoning
-
-## Deployment
-- Vercel (Frontend)
-- Railway / Render (Backend + PostgreSQL)
-
----
-
-# Product Experience
-
-RootRecall is designed to feel:
-- cinematic
-- operational
-- enterprise-grade
-- AI-native
-- realtime
-- calm under pressure
-
-Inspired by:
-- Linear
-- Vercel
-- modern observability platforms
-- AI infrastructure tooling
-
----
-
-# Architecture
-
-```bash
-rootrecall/
-├── frontend/
-├── backend/
-├── shared/
-├── docs/
+    UI --> API
+    UI <--> WS
+    API --> AuthSys
+    API --> Orchestrator
+    WS <--> Replay
+    AutoEngine --> Telemetry
+    Telemetry --> Replay
+    Orchestrator --> Replay
 ```
 
----
-
-# Realtime Intelligence Engine
-
-RootRecall uses a centralized operational orchestration layer to correlate:
-- deployments
-- telemetry
-- infrastructure health
-- incidents
-- AI reasoning
-- replay systems
-
-This creates a believable realtime operational environment instead of isolated static dashboards.
+- **Frontend:** Next.js application delivering a highly responsive, cinematic UI.
+- **Backend:** Node.js/Express handling robust REST APIs and core business logic.
+- **WebSocket Layer:** Provides low-latency, bidirectional communication for realtime telemetry and replay streams.
+- **AI Orchestration Layer:** Manages interactions with LLMs for root cause analysis and postmortem generation.
+- **Incident Replay Engine:** Reconstructs timelines by correlating deployment events and infrastructure health.
+- **Telemetry Pipeline:** Ingests and normalizes operational data.
+- **Automation Engine:** Drives operational workflows and proactive incident resolution recommendations.
 
 ---
 
-# Security
+## Security
 
-RootRecall includes:
-- secure authentication
-- Google OAuth
-- protected API routes
-- rate limiting
-- CSP headers
-- websocket validation
-- XSS sanitization
-- secure environment isolation
+This project was developed with security-first engineering principles despite rapid hackathon timelines.
+
+- **Secure Authentication:** Managed via Google OAuth.
+- **Protected Backend Routes:** Strict middleware validation for all sensitive endpoints.
+- **Validation Pipelines:** Comprehensive input sanitization to prevent injection attacks.
+- **Rate Limiting:** Protection against automated abuse and API exhaustion.
+- **Secure Environment Variable Handling:** Isolated configuration management.
+- **API Versioning:** Structured endpoint design for future compatibility.
 
 ---
 
-# Local Development
+## Recommended Demo Flow
 
-## Frontend
+To experience the full capabilities of RootRecall, we recommend the following simulation flow:
 
+1. **Healthy Systems:** Observe the realtime operational dashboard in a steady state.
+2. **Deployment Event:** Trigger a new deployment to establish a baseline event.
+3. **Latency Spike:** Simulate infrastructure degradation following the deployment.
+4. **AI Detection:** Watch the platform automatically detect the anomaly and correlate it.
+5. **Replay Engine:** Utilize the cinematic replay system to review the exact timeline of failure.
+6. **AI Copilot:** Engage the conversational assistant for immediate root cause analysis.
+7. **Postmortem Generation:** Automatically draft a comprehensive incident report.
+8. **Prevention Recommendations:** Review AI-generated strategies to prevent recurrence.
+
+📺 **[Watch the full product simulation video here](https://drive.google.com/file/d/1lt2wB8-XP_elHoodfndBV5We9yTMzKMk/view?usp=share_link)**
+
+---
+
+## Tech Stack
+
+| Layer | Technologies |
+| :--- | :--- |
+| **Frontend** | Next.js, TailwindCSS, shadcn/ui, Framer Motion, Recharts |
+| **Backend** | Node.js / Express, WebSockets, REST APIs |
+| **AI** | Gemini / OpenAI, Incident Analysis Workflows, RCA Generation |
+| **Deployment** | Vercel, Railway |
+| **Auth** | Google OAuth, JWT / Session Handling |
+
+---
+
+## Local Development
+
+**Frontend Environment:**
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
 
-## Backend
-
+**Backend Environment:**
 ```bash
 cd backend
-pip install -r requirements.txt
-uvicorn app.main:app --reload
+npm install
+npm run dev
 ```
 
----
-
-# Environment Variables
-
-Create `.env` files using `.env.example`.
-
-Required services:
-- PostgreSQL
-- OpenAI/Gemini API
-- Google OAuth
-- Redis
+*(Note: Ensure all environment variables in `.env` are configured prior to starting the development servers. Required services include PostgreSQL, Redis, Google OAuth credentials, and AI API keys.)*
 
 ---
 
-# Deployment
+RootRecall transforms operational chaos into structured intelligence. 
 
-## Frontend
-Deploy on:
-- Vercel
-
-## Backend
-Deploy on:
-- Railway
-OR
-- Render
-
----
-
-# Demo Flow
-
-📺 **[Watch the full product simulation video here](https://drive.google.com/file/d/1lt2wB8-XP_elHoodfndBV5We9yTMzKMk/view?usp=share_link)**
-
-1. Trigger deployment
-2. Simulate outage
-3. Detect anomaly
-4. AI reconstructs incident
-5. Generate postmortem
-6. Replay outage timeline
-7. Recommend remediation
-
----
-
-# Vision
-
-RootRecall aims to become an AI-powered operational intelligence system for modern engineering organizations.
-
-The platform is built around one core belief:
-
-> Operational failures should become organizational intelligence.
-
----
-
-# License
-
-MIT License
+- **GitHub Repository:** [RootRecall Source Code](https://github.com/org/rootrecall)
+- **Live Deployment:** [rootrecall.com](https://rootrecall.com)
+- **Demo Video:** [Watch Demo](https://drive.google.com/file/d/1lt2wB8-XP_elHoodfndBV5We9yTMzKMk/view?usp=share_link)
+- **Team Credits:** Developed by the RootRecall Engineering Team.
+- **License:** MIT License
+- **Acknowledgements:** Special thanks to the open-source communities powering our stack.
