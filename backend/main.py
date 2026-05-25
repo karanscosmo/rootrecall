@@ -268,10 +268,16 @@ def get_postmortems(request: Request, db: Session = Depends(get_db)):
             "incidentTitle": title,
             "severity": severity,
             "service": service,
-            "executiveSummary": pm.executive_summary,
-            "timeline": pm.timeline or [],
-            "rootCauseAnalysis": pm.root_cause_analysis,
-            "preventionItems": pm.prevention_items or [],
+            "incidentSummary": pm.incident_summary,
+            "rootCause": pm.root_cause,
+            "impactAnalysis": pm.impact_analysis,
+            "affectedSystems": pm.affected_systems or [],
+            "timelineOfEvents": pm.timeline_of_events or [],
+            "recoveryDuration": pm.recovery_duration,
+            "resolutionSteps": pm.resolution_steps or [],
+            "lessonsLearned": pm.lessons_learned or [],
+            "preventiveRecommendations": pm.preventive_recommendations or [],
+            "futureRiskProbability": pm.future_risk_probability,
             "createdAt": pm.created_at.isoformat() + "Z" if pm.created_at else None
         })
     return res
@@ -286,20 +292,32 @@ def create_postmortem(request: Request, pm_data: PostmortemCreate, db: Session =
         
     existing = db.query(Postmortem).filter(Postmortem.incident_id == clean_inc_id).first()
     if existing:
-        existing.executive_summary = pm_data.executiveSummary
-        existing.root_cause_analysis = pm_data.rootCauseAnalysis
-        existing.timeline = pm_data.timeline
-        existing.prevention_items = pm_data.preventionItems
+        existing.incident_summary = pm_data.incident_summary
+        existing.root_cause = pm_data.root_cause
+        existing.impact_analysis = pm_data.impact_analysis
+        existing.affected_systems = pm_data.affected_systems
+        existing.timeline_of_events = pm_data.timeline_of_events
+        existing.recovery_duration = pm_data.recovery_duration
+        existing.resolution_steps = pm_data.resolution_steps
+        existing.lessons_learned = pm_data.lessons_learned
+        existing.preventive_recommendations = pm_data.preventive_recommendations
+        existing.future_risk_probability = pm_data.future_risk_probability
         db.commit()
         db.refresh(existing)
         return {"status": "updated", "id": existing.id}
     
     new_pm = Postmortem(
         incident_id=clean_inc_id,
-        executive_summary=pm_data.executiveSummary,
-        root_cause_analysis=pm_data.rootCauseAnalysis,
-        timeline=pm_data.timeline,
-        prevention_items=pm_data.preventionItems
+        incident_summary=pm_data.incident_summary,
+        root_cause=pm_data.root_cause,
+        impact_analysis=pm_data.impact_analysis,
+        affected_systems=pm_data.affected_systems,
+        timeline_of_events=pm_data.timeline_of_events,
+        recovery_duration=pm_data.recovery_duration,
+        resolution_steps=pm_data.resolution_steps,
+        lessons_learned=pm_data.lessons_learned,
+        preventive_recommendations=pm_data.preventive_recommendations,
+        future_risk_probability=pm_data.future_risk_probability
     )
     db.add(new_pm)
     db.commit()
@@ -343,20 +361,32 @@ async def generate_postmortem_endpoint(request: Request, incident_id: str, db: S
     
     existing = db.query(Postmortem).filter(Postmortem.incident_id == clean_inc_id).first()
     if existing:
-        existing.executive_summary = pm_result.get("executive_summary", "")
-        existing.root_cause_analysis = pm_result.get("root_cause_analysis", "")
-        existing.timeline = pm_result.get("timeline", [])
-        existing.prevention_items = pm_result.get("prevention_items", [])
+        existing.incident_summary = pm_result.get("incident_summary", "")
+        existing.root_cause = pm_result.get("root_cause", "")
+        existing.impact_analysis = pm_result.get("impact_analysis", "")
+        existing.affected_systems = pm_result.get("affected_systems", [])
+        existing.timeline_of_events = pm_result.get("timeline_of_events", [])
+        existing.recovery_duration = pm_result.get("recovery_duration", "")
+        existing.resolution_steps = pm_result.get("resolution_steps", [])
+        existing.lessons_learned = pm_result.get("lessons_learned", [])
+        existing.preventive_recommendations = pm_result.get("preventive_recommendations", [])
+        existing.future_risk_probability = pm_result.get("future_risk_probability", "")
         db.commit()
         db.refresh(existing)
         return {"status": "updated", "id": existing.id}
         
     new_pm = Postmortem(
         incident_id=clean_inc_id,
-        executive_summary=pm_result.get("executive_summary", ""),
-        root_cause_analysis=pm_result.get("root_cause_analysis", ""),
-        timeline=pm_result.get("timeline", []),
-        prevention_items=pm_result.get("prevention_items", [])
+        incident_summary=pm_result.get("incident_summary", ""),
+        root_cause=pm_result.get("root_cause", ""),
+        impact_analysis=pm_result.get("impact_analysis", ""),
+        affected_systems=pm_result.get("affected_systems", []),
+        timeline_of_events=pm_result.get("timeline_of_events", []),
+        recovery_duration=pm_result.get("recovery_duration", ""),
+        resolution_steps=pm_result.get("resolution_steps", []),
+        lessons_learned=pm_result.get("lessons_learned", []),
+        preventive_recommendations=pm_result.get("preventive_recommendations", []),
+        future_risk_probability=pm_result.get("future_risk_probability", "")
     )
     db.add(new_pm)
     db.commit()

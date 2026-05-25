@@ -8,39 +8,39 @@ from database import SessionLocal, Incident, SystemSettings
 
 SCENARIOS = {
     "redis_saturation": {
-        "service": "cache-cluster",
-        "message": "Redis Saturation: cache memory utilization crossed 98% threshold.",
+        "service": "cache-cluster-prod",
+        "message": "Redis Saturation: cache memory utilization crossed 98% threshold on primary node.",
         "incident_title": "Redis Cache Saturation & OOM Cascade",
         "severity": "SEV-1",
-        "impact": "100% checkout failure, ~$3.2k/min revenue loss"
+        "impact": "100% checkout failure rate, ~$3.2k/min revenue loss. User sessions invalidated."
     },
     "k8s_pod_failure": {
-        "service": "worker-pool",
-        "message": "Kubernetes node eviction on node worker-pool-3.",
-        "incident_title": "Worker Pool Degraded: Pod Eviction Failure",
+        "service": "worker-pool-async",
+        "message": "Kubernetes node eviction on node worker-pool-3-us-east due to memory pressure.",
+        "incident_title": "Worker Pool Degraded: Pod Eviction Cascade",
         "severity": "SEV-2",
-        "impact": "Background jobs delayed, queue latency > 15s"
+        "impact": "Background jobs delayed, asynchronous queue latency > 15s. Reporting delayed."
     },
     "db_pool_exhaustion": {
-        "service": "db-primary",
-        "message": "PostgreSQL active connection pool saturation detected.",
-        "incident_title": "PostgreSQL Connection Pool Saturation Cascade",
+        "service": "db-primary-cluster",
+        "message": "PostgreSQL active connection pool saturation detected (connections > 400).",
+        "incident_title": "PostgreSQL Connection Pool Saturation",
         "severity": "SEV-1",
-        "impact": "All user profile and auth requests timing out"
+        "impact": "All user profile and auth requests timing out. 503 errors returned to gateway."
     },
     "api_latency": {
-        "service": "api-gateway",
-        "message": "API Gateway ingress queue congestion.",
+        "service": "api-gateway-edge",
+        "message": "API Gateway ingress queue congestion exceeding baseline by 400%.",
         "incident_title": "API Gateway Latency Spike under High Load",
         "severity": "SEV-2",
-        "impact": "Ingress latency > 2000ms, minor packet drops"
+        "impact": "Ingress P99 latency > 2000ms, minor packet drops across eu-west regions."
     },
     "auth_instability": {
-        "service": "auth-service",
+        "service": "auth-service-core",
         "message": "Upstream identity provider handshake timeout.",
         "incident_title": "Auth Service Degradation: Upstream Handshake Failure",
         "severity": "SEV-1",
-        "impact": "90% of user logins and token refreshes failing"
+        "impact": "90% of user logins and token refreshes failing. Internal IAM sync paused."
     }
 }
 
@@ -58,26 +58,26 @@ class SimulationEngine:
         
         # Real-time service topology with independent health trackers matching frontend keys
         self.services = {
-            "api-gateway": {"latency": 15, "errors": 0.05, "cpu": 20, "memory": 40, "status": "healthy"},
-            "auth-service": {"latency": 45, "errors": 0.1, "cpu": 30, "memory": 50, "status": "healthy"},
+            "api-gateway-edge": {"latency": 15, "errors": 0.05, "cpu": 20, "memory": 40, "status": "healthy"},
+            "auth-service-core": {"latency": 45, "errors": 0.1, "cpu": 30, "memory": 50, "status": "healthy"},
             "checkout-api": {"latency": 40, "errors": 0.1, "cpu": 25, "memory": 55, "status": "healthy"},
             "user-profile": {"latency": 30, "errors": 0.1, "cpu": 20, "memory": 45, "status": "healthy"},
-            "cache-cluster": {"latency": 2, "errors": 0.0, "cpu": 15, "memory": 60, "status": "healthy"},
-            "db-primary": {"latency": 25, "errors": 0.1, "cpu": 35, "memory": 70, "status": "healthy"},
-            "worker-pool": {"latency": 100, "errors": 0.2, "cpu": 40, "memory": 65, "status": "healthy"},
+            "cache-cluster-prod": {"latency": 2, "errors": 0.0, "cpu": 15, "memory": 60, "status": "healthy"},
+            "db-primary-cluster": {"latency": 25, "errors": 0.1, "cpu": 35, "memory": 70, "status": "healthy"},
+            "worker-pool-async": {"latency": 100, "errors": 0.2, "cpu": 40, "memory": 65, "status": "healthy"},
             "job-queue": {"latency": 5, "errors": 0.0, "cpu": 10, "memory": 30, "status": "healthy"}
         }
         
         # Dependency graph for cascading failures
         self.topology_graph = {
-            "api-gateway": ["auth-service", "checkout-api", "user-profile"],
-            "auth-service": ["db-primary", "cache-cluster"],
-            "checkout-api": ["cache-cluster", "worker-pool"],
-            "user-profile": ["db-primary", "cache-cluster"],
-            "worker-pool": ["db-primary", "cache-cluster", "job-queue"],
-            "job-queue": ["db-primary"],
-            "cache-cluster": [],
-            "db-primary": []
+            "api-gateway-edge": ["auth-service-core", "checkout-api", "user-profile"],
+            "auth-service-core": ["db-primary-cluster", "cache-cluster-prod"],
+            "checkout-api": ["cache-cluster-prod", "worker-pool-async"],
+            "user-profile": ["db-primary-cluster", "cache-cluster-prod"],
+            "worker-pool-async": ["db-primary-cluster", "cache-cluster-prod", "job-queue"],
+            "job-queue": ["db-primary-cluster"],
+            "cache-cluster-prod": [],
+            "db-primary-cluster": []
         }
         
         self.failing_service = None
@@ -186,13 +186,13 @@ class SimulationEngine:
         
         # Stabilize all services to their baselines
         baselines = {
-            "api-gateway": {"latency": 15, "errors": 0.05, "cpu": 20, "memory": 40},
-            "auth-service": {"latency": 45, "errors": 0.1, "cpu": 30, "memory": 50},
+            "api-gateway-edge": {"latency": 15, "errors": 0.05, "cpu": 20, "memory": 40},
+            "auth-service-core": {"latency": 45, "errors": 0.1, "cpu": 30, "memory": 50},
             "checkout-api": {"latency": 40, "errors": 0.1, "cpu": 25, "memory": 55},
             "user-profile": {"latency": 30, "errors": 0.1, "cpu": 20, "memory": 45},
-            "cache-cluster": {"latency": 2, "errors": 0.0, "cpu": 15, "memory": 60},
-            "db-primary": {"latency": 25, "errors": 0.1, "cpu": 35, "memory": 70},
-            "worker-pool": {"latency": 100, "errors": 0.2, "cpu": 40, "memory": 65},
+            "cache-cluster-prod": {"latency": 2, "errors": 0.0, "cpu": 15, "memory": 60},
+            "db-primary-cluster": {"latency": 25, "errors": 0.1, "cpu": 35, "memory": 70},
+            "worker-pool-async": {"latency": 100, "errors": 0.2, "cpu": 40, "memory": 65},
             "job-queue": {"latency": 5, "errors": 0.0, "cpu": 10, "memory": 30}
         }
         for k, v in self.services.items():
@@ -212,11 +212,11 @@ class SimulationEngine:
         
         if scenario == "redis_saturation":
             # Cache cluster goes down
-            self.services["cache-cluster"]["status"] = "critical"
-            self.services["cache-cluster"]["latency"] = 1500
-            self.services["cache-cluster"]["cpu"] = 99
-            self.services["cache-cluster"]["memory"] = 100
-            self.services["cache-cluster"]["errors"] = 85.0
+            self.services["cache-cluster-prod"]["status"] = "critical"
+            self.services["cache-cluster-prod"]["latency"] = 1500
+            self.services["cache-cluster-prod"]["cpu"] = 99
+            self.services["cache-cluster-prod"]["memory"] = 100
+            self.services["cache-cluster-prod"]["errors"] = 85.0
             
             # Checkout API breaks cascadingly
             self.services["checkout-api"]["status"] = "critical"
@@ -225,20 +225,20 @@ class SimulationEngine:
             self.services["checkout-api"]["cpu"] = 80
             
             # Auth service degrades slightly because it reads/writes session cache
-            self.services["auth-service"]["status"] = "degraded"
-            self.services["auth-service"]["latency"] = 420
-            self.services["auth-service"]["errors"] = 12.0
+            self.services["auth-service-core"]["status"] = "degraded"
+            self.services["auth-service-core"]["latency"] = 420
+            self.services["auth-service-core"]["errors"] = 12.0
             
             # API Gateway experiences ingress backup
-            self.services["api-gateway"]["status"] = "degraded"
-            self.services["api-gateway"]["latency"] = 180
+            self.services["api-gateway-edge"]["status"] = "degraded"
+            self.services["api-gateway-edge"]["latency"] = 180
             
         elif scenario == "k8s_pod_failure":
             # Worker Pool is evicted/failing
-            self.services["worker-pool"]["status"] = "critical"
-            self.services["worker-pool"]["cpu"] = 99
-            self.services["worker-pool"]["latency"] = 850
-            self.services["worker-pool"]["errors"] = 25.0
+            self.services["worker-pool-async"]["status"] = "critical"
+            self.services["worker-pool-async"]["cpu"] = 99
+            self.services["worker-pool-async"]["latency"] = 850
+            self.services["worker-pool-async"]["errors"] = 25.0
             
             # Job Queue backs up
             self.services["job-queue"]["status"] = "critical"
@@ -253,39 +253,39 @@ class SimulationEngine:
             
         elif scenario == "db_pool_exhaustion":
             # DB saturation
-            self.services["db-primary"]["status"] = "critical"
-            self.services["db-primary"]["cpu"] = 99
-            self.services["db-primary"]["latency"] = 2500
-            self.services["db-primary"]["errors"] = 15.0
+            self.services["db-primary-cluster"]["status"] = "critical"
+            self.services["db-primary-cluster"]["cpu"] = 99
+            self.services["db-primary-cluster"]["latency"] = 2500
+            self.services["db-primary-cluster"]["errors"] = 15.0
             
             # Auth and profile APIs fail directly
-            self.services["auth-service"]["status"] = "critical"
-            self.services["auth-service"]["latency"] = 4500
-            self.services["auth-service"]["errors"] = 50.0
+            self.services["auth-service-core"]["status"] = "critical"
+            self.services["auth-service-core"]["latency"] = 4500
+            self.services["auth-service-core"]["errors"] = 50.0
             
             self.services["user-profile"]["status"] = "critical"
             self.services["user-profile"]["latency"] = 3500
             self.services["user-profile"]["errors"] = 45.0
             
             # API Gateway times out
-            self.services["api-gateway"]["status"] = "degraded"
-            self.services["api-gateway"]["latency"] = 800
+            self.services["api-gateway-edge"]["status"] = "degraded"
+            self.services["api-gateway-edge"]["latency"] = 800
             
         elif scenario == "api_latency":
-            self.services["api-gateway"]["status"] = "critical"
-            self.services["api-gateway"]["latency"] = 2400
-            self.services["api-gateway"]["cpu"] = 95
-            self.services["api-gateway"]["errors"] = 8.5
+            self.services["api-gateway-edge"]["status"] = "critical"
+            self.services["api-gateway-edge"]["latency"] = 2400
+            self.services["api-gateway-edge"]["cpu"] = 95
+            self.services["api-gateway-edge"]["errors"] = 8.5
             
         elif scenario == "auth_instability":
             # Auth service degrades
-            self.services["auth-service"]["status"] = "critical"
-            self.services["auth-service"]["latency"] = 5000
-            self.services["auth-service"]["errors"] = 92.0
+            self.services["auth-service-core"]["status"] = "critical"
+            self.services["auth-service-core"]["latency"] = 5000
+            self.services["auth-service-core"]["errors"] = 92.0
             
             # API Gateway experiences degradation
-            self.services["api-gateway"]["status"] = "degraded"
-            self.services["api-gateway"]["latency"] = 620
+            self.services["api-gateway-edge"]["status"] = "degraded"
+            self.services["api-gateway-edge"]["latency"] = 620
 
     async def _run_loop(self):
         healthy_duration = 0

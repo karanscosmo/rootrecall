@@ -4,10 +4,16 @@ from datetime import datetime
 
 class PostmortemCreate(BaseModel):
     incidentId: str = Field(..., max_length=100)
-    executiveSummary: str = Field(..., max_length=5000)
-    rootCauseAnalysis: str = Field(..., max_length=10000)
-    timeline: list = Field(default=[], max_length=500)
-    preventionItems: list = Field(default=[], max_length=100)
+    incident_summary: str = Field(..., max_length=5000)
+    root_cause: str = Field(..., max_length=5000)
+    impact_analysis: str = Field(..., max_length=5000)
+    affected_systems: list = Field(default=[], max_length=100)
+    timeline_of_events: list = Field(default=[], max_length=500)
+    recovery_duration: str = Field(..., max_length=500)
+    resolution_steps: list = Field(default=[], max_length=500)
+    lessons_learned: list = Field(default=[], max_length=500)
+    preventive_recommendations: list = Field(default=[], max_length=500)
+    future_risk_probability: str = Field(..., max_length=500)
 
 class SettingsUpdate(BaseModel):
     key: str = Field(..., max_length=100)
@@ -49,10 +55,16 @@ class PostmortemResponse(BaseModel):
     incidentTitle: str
     severity: str
     service: str
-    executiveSummary: str
-    timeline: list
-    rootCauseAnalysis: str
-    preventionItems: list
+    incidentSummary: str
+    rootCause: str
+    impactAnalysis: str
+    affectedSystems: list
+    timelineOfEvents: list
+    recoveryDuration: str
+    resolutionSteps: list
+    lessonsLearned: list
+    preventiveRecommendations: list
+    futureRiskProbability: str
     createdAt: Optional[str] = None
 
 class MemoryResponse(BaseModel):

@@ -11,10 +11,16 @@ interface PostmortemData {
   incidentTitle: string;
   severity: string;
   service: string;
-  executiveSummary: string;
-  timeline: { time: string; description: string }[];
-  rootCauseAnalysis: string;
-  preventionItems: string[];
+  incidentSummary: string;
+  rootCause: string;
+  impactAnalysis: string;
+  affectedSystems: string[];
+  timelineOfEvents: { time: string; description: string }[];
+  recoveryDuration: string;
+  resolutionSteps: string[];
+  lessonsLearned: string[];
+  preventiveRecommendations: string[];
+  futureRiskProbability: string;
   createdAt: string;
 }
 
@@ -216,7 +222,7 @@ export default function PostmortemsPage() {
               </div>
               <div className="flex items-center gap-2 ml-auto">
                 <button
-                  onClick={() => navigator.clipboard.writeText(`# ${selectedPM.incidentTitle}\n\n## Executive Summary\n${selectedPM.executiveSummary}`)}
+                  onClick={() => navigator.clipboard.writeText(`# ${selectedPM.incidentTitle}\n\n## Incident Summary\n${selectedPM.incidentSummary}`)}
                   className="flex items-center gap-1.5 font-mono text-[11px] text-rr-muted hover:text-rr-text px-3 py-1.5 border border-rr-border rounded-md hover:bg-white/5 transition-colors"
                 >
                   <span className="material-symbols-outlined" style={{ fontSize: 14 }}>content_copy</span>
@@ -246,34 +252,51 @@ export default function PostmortemsPage() {
               </p>
 
               {/* Section */}
-              <Section title="1. Summary">
-                <p className="text-[14px] text-rr-muted leading-relaxed">{selectedPM.executiveSummary}</p>
+              <Section title="1. Incident Summary">
+                <p className="text-[14px] text-rr-muted leading-relaxed">{selectedPM.incidentSummary}</p>
               </Section>
 
-              <Section title="2. Impact">
-                <ul className="space-y-2 text-[14px] text-rr-muted">
-                  <li><strong className="text-rr-text">Service Impacted:</strong> {selectedPM.service}</li>
-                  <li><strong className="text-rr-text">Incident ID:</strong> {selectedPM.incidentId}</li>
-                  <li><strong className="text-rr-text">User Exposure:</strong> High customer transaction failures detected.</li>
+              <Section title="2. Impact Analysis">
+                <p className="text-[14px] text-rr-muted leading-relaxed mb-3">{selectedPM.impactAnalysis}</p>
+                <ul className="space-y-2 text-[14px] text-rr-muted mt-2">
+                  <li><strong className="text-rr-text">Primary Service:</strong> {selectedPM.service}</li>
+                  <li><strong className="text-rr-text">Affected Systems:</strong> {selectedPM.affectedSystems?.join(", ") || "N/A"}</li>
+                  <li><strong className="text-rr-text">Recovery Duration:</strong> {selectedPM.recoveryDuration}</li>
                 </ul>
               </Section>
 
               <Section title="3. Root Cause Analysis">
-                <p className="text-[14px] text-rr-muted leading-relaxed mb-3">{selectedPM.rootCauseAnalysis}</p>
+                <p className="text-[14px] text-rr-muted leading-relaxed mb-3">{selectedPM.rootCause}</p>
               </Section>
 
-              <Section title="4. Timeline">
-                <Timeline events={selectedPM.timeline.map(t => ({
+              <Section title="4. Timeline of Events">
+                <Timeline events={selectedPM.timelineOfEvents?.map((t: any) => ({
                   time: t.time,
                   color: t.description.includes("mitigated") || t.description.includes("mitigate") ? "bg-rr-green" : "bg-rr-error",
                   text: t.description,
                   isSuccess: t.description.includes("mitigated") || t.description.includes("mitigate")
-                }))} />
+                })) || []} />
               </Section>
 
-              <Section title="5. Action Items">
+              <Section title="5. Resolution Steps">
+                <ul className="list-disc pl-5 space-y-2 text-[14px] text-rr-muted">
+                  {selectedPM.resolutionSteps?.map((step: string, i: number) => (
+                    <li key={i}>{step}</li>
+                  )) || <li>No resolution steps documented.</li>}
+                </ul>
+              </Section>
+
+              <Section title="6. Lessons Learned">
+                <ul className="list-disc pl-5 space-y-2 text-[14px] text-rr-muted">
+                  {selectedPM.lessonsLearned?.map((lesson: string, i: number) => (
+                    <li key={i}>{lesson}</li>
+                  )) || <li>No lessons documented.</li>}
+                </ul>
+              </Section>
+
+              <Section title="7. Preventive Recommendations">
                 <div className="space-y-3">
-                  {selectedPM.preventionItems.map((item, i) => (
+                  {selectedPM.preventiveRecommendations?.map((item: string, i: number) => (
                     <div key={i} className="bg-rr-surface border border-rr-border rounded-lg p-3 flex gap-3">
                       <span className="material-symbols-outlined text-rr-muted mt-0.5" style={{ fontSize: 18 }}>check_box_outline_blank</span>
                       <div>
@@ -281,7 +304,7 @@ export default function PostmortemsPage() {
                         <div className="font-mono text-[10px] text-rr-muted/60">Assignee: Platform / SRE Team · Due: Pending</div>
                       </div>
                     </div>
-                  ))}
+                  )) || <div className="text-[14px] text-rr-muted">No preventive recommendations found.</div>}
                 </div>
               </Section>
             </article>
@@ -297,11 +320,11 @@ export default function PostmortemsPage() {
             {/* Recurrence */}
             <div className="bg-rr-bg border border-rr-border rounded-lg overflow-hidden">
               <div className="px-3 py-2 border-b border-rr-border flex justify-between">
-                <span className="font-mono text-[11px] text-rr-text">Recurrence Probability</span>
-                <span className="font-mono text-[11px] text-rr-warn">Medium (64%)</span>
+                <span className="font-mono text-[11px] text-rr-text">Future Risk Probability</span>
+                <span className="font-mono text-[11px] text-rr-warn">{selectedPM.futureRiskProbability || "Medium"}</span>
               </div>
               <div className="p-3">
-                <p className="font-mono text-[11px] text-rr-muted mb-2">Cascading timeouts are typical under high thread-pool saturation events.</p>
+                <p className="font-mono text-[11px] text-rr-muted mb-2">Based on historical context and current prevention items.</p>
                 <div className="h-1 w-full bg-rr-border rounded-full overflow-hidden">
                   <div className="h-full bg-rr-warn rounded-full" style={{ width: "64%" }} />
                 </div>

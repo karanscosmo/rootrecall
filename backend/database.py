@@ -51,10 +51,16 @@ class Postmortem(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     incident_id = Column(Integer, index=True)
-    executive_summary = Column(String)
-    timeline = Column(JSON)
-    root_cause_analysis = Column(String)
-    prevention_items = Column(JSON)
+    incident_summary = Column(String)
+    root_cause = Column(String)
+    impact_analysis = Column(String)
+    affected_systems = Column(JSON)
+    timeline_of_events = Column(JSON)
+    recovery_duration = Column(String)
+    resolution_steps = Column(JSON)
+    lessons_learned = Column(JSON)
+    preventive_recommendations = Column(JSON)
+    future_risk_probability = Column(String)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
 class User(Base):
@@ -186,17 +192,29 @@ def seed_database():
             postmortems_to_seed = [
                 Postmortem(
                     incident_id=8201,
-                    executive_summary="On 2026-05-23, user-profile API latency spike caused elevated 5xx error rate affecting ~12% of traffic.",
-                    timeline=[
+                    incident_summary="On 2026-05-23, user-profile API latency spike caused elevated 5xx error rate affecting ~12% of traffic.",
+                    root_cause="A recent deployment introduced a new query that performed a full table scan on the users table due to a missing index on last_login column.",
+                    impact_analysis="12% of traffic failing with 5xx errors, degraded user experience during login and profile access.",
+                    affected_systems=["services/user-profile", "db-primary"],
+                    timeline_of_events=[
                         {"time": "14:02 UTC", "description": "Alert triggered for elevated 5xx error rate on user-profile API"},
                         {"time": "14:05 UTC", "description": "AI Copilot isolated issue to a slow DB query on users table"},
                         {"time": "14:15 UTC", "description": "SRE rolled back deployment to v1.2.3, error rate normalized"}
                     ],
-                    root_cause_analysis="A recent deployment introduced a new query that performed a full table scan on the users table due to a missing index on last_login column.",
-                    prevention_items=[
+                    recovery_duration="13 minutes",
+                    resolution_steps=[
+                        "Rolled back deployment to previous stable version (v1.2.3)",
+                        "Asynchronously added missing index to users table"
+                    ],
+                    lessons_learned=[
+                        "Missing indexes can cause catastrophic cascading failures on primary DB",
+                        "Query performance must be validated in CI before deployment"
+                    ],
+                    preventive_recommendations=[
                         "Add missing index idx_user_last_login on users(last_login)",
                         "Add query validation explain check in CI pipelines"
-                    ]
+                    ],
+                    future_risk_probability="Low (if CI checks are implemented)"
                 )
             ]
             for pm in postmortems_to_seed:

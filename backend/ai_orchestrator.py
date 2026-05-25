@@ -19,10 +19,16 @@ class RCAResponse(BaseModel):
     remediation_steps: List[RemediationStep]
 
 class PostmortemModel(BaseModel):
-    executive_summary: str
-    root_cause_analysis: str
-    timeline: List[dict] # list of {"time": str, "description": str}
-    prevention_items: List[str]
+    incident_summary: str
+    root_cause: str
+    impact_analysis: str
+    affected_systems: List[str]
+    timeline_of_events: List[dict] # list of {"time": str, "description": str}
+    recovery_duration: str
+    resolution_steps: List[str]
+    lessons_learned: List[str]
+    preventive_recommendations: List[str]
+    future_risk_probability: str
 
 class CopilotChatResponse(BaseModel):
     content: str
@@ -195,10 +201,16 @@ class AIOrchestrator:
             ]
             
             return {
-                "executive_summary": exec_summary,
-                "root_cause_analysis": rca_details,
-                "timeline": timeline,
-                "prevention_items": prev_items
+                "incident_summary": exec_summary,
+                "root_cause": rca_details,
+                "impact_analysis": impact,
+                "affected_systems": [service, "api-gateway"],
+                "timeline_of_events": timeline,
+                "recovery_duration": "5m 40s",
+                "resolution_steps": ["Scaled horizontal replicas", "Applied rate limits"],
+                "lessons_learned": ["Cascading failures occur when circuit breakers are absent.", "Telemetry correlation needs to be faster."],
+                "preventive_recommendations": prev_items,
+                "future_risk_probability": "Medium"
             }
 
         prompt = f"""
@@ -206,7 +218,22 @@ class AIOrchestrator:
         Incident details: {json.dumps(incident)}
         Metrics at failure: {json.dumps(metrics_snapshot)}
         
-        Write a detailed Executive Summary, a thorough Root Cause Analysis, a chronological timeline of the event, and exactly 3 concrete Prevention Items.
+        Write a complete Postmortem mapping to the following fields:
+        - incident_summary
+        - root_cause
+        - impact_analysis
+        - affected_systems
+        - timeline_of_events (chronological list of objects with time and description)
+        - recovery_duration
+        - resolution_steps
+        - lessons_learned
+        - preventive_recommendations
+        - future_risk_probability
+        
+        IMPORTANT RULES:
+        - Do not use generic filler words or lorem ipsum.
+        - Extract exact metrics, services, and timestamps from the context provided.
+        - Ensure all 10 fields are accurately generated and non-empty.
         Return as JSON matching schema.
         """
         
@@ -226,10 +253,16 @@ class AIOrchestrator:
         except Exception as e:
             logger.error(f"Gemini postmortem generation failed: {e}")
             return {
-                "executive_summary": "Failed to generate postmortem executive summary.",
-                "root_cause_analysis": f"Generation error: {str(e)}",
-                "timeline": [],
-                "prevention_items": []
+                "incident_summary": "Failed to generate postmortem summary.",
+                "root_cause": f"Generation error: {str(e)}",
+                "impact_analysis": "Unknown",
+                "affected_systems": [],
+                "timeline_of_events": [],
+                "recovery_duration": "Unknown",
+                "resolution_steps": [],
+                "lessons_learned": [],
+                "preventive_recommendations": [],
+                "future_risk_probability": "Unknown"
             }
 
     async def copilot_chat(self, user_message: str, active_incident: Optional[dict], live_metrics: dict) -> dict:
